@@ -2,11 +2,21 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useFormStatus } from "react-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { loginAction } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+function SignInButton() {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" className="w-full" disabled={pending}>
+      {pending ? "Signing in…" : "Sign in"}
+    </Button>
+  );
+}
 
 export function LoginForm({
   callbackUrl,
@@ -88,9 +98,7 @@ export function LoginForm({
           Forgot password?
         </Link>
       </div>
-      <Button type="submit" className="w-full">
-        Sign in
-      </Button>
+      <SignInButton />
     </form>
   );
 }

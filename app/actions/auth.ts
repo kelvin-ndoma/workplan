@@ -12,7 +12,7 @@ import { isAllowedWorkEmail } from "@/lib/allowed-email";
 import { rateLimit } from "@/lib/rate-limit";
 import { safeInternalPath } from "@/lib/safe-path";
 import { requireUser } from "@/lib/session";
-import { User } from "@/models";
+import { User } from "@/models/User";
 
 function hashResetToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
@@ -39,7 +39,11 @@ export async function loginAction(formData: FormData) {
     if (error instanceof AuthError) {
       redirect("/login?error=1");
     }
-    throw error;
+    if (typeof error === "object" && error && "digest" in error) {
+      throw error;
+    }
+    console.error("Login action failed", error);
+    redirect("/login?error=1");
   }
 }
 
@@ -62,24 +66,28 @@ export async function requestPasswordResetAction(formData: FormData) {
     return { ok: true as const };
   }
 
-  await connectDB();
-  const user = await User.findOne({ email, isActive: true });
-  if (user) {
-    const token = randomBytes(32).toString("hex");
-    user.passwordResetToken = hashResetToken(token);
-    user.passwordResetExpires = addHours(new Date(), 1);
-    await user.save();
-    const mail = passwordResetEmail({
-      name: String(user.name).split(" ")[0],
-      resetUrl: `${appUrl()}/reset-password?token=${token}`,
-    });
-    const result = await sendEmail({ to: user.email, ...mail });
-    if (result && "error" in result && result.error) {
-      return { error: "Could not send the reset email. Try again in a minute." };
+  try {
+    await connectDB();
+    const user = await User.findOne({ email, isActive: true }).select("name email");
+    if (user) {
+      const token = randomBytes(32).toString("hex");
+      user.passwordResetToken = hashResetToken(token);
+      user.passwordResetExpires = addHours(new Date(), 1);
+      await user.save();
+      const mail = passwordResetEmail({
+        name: String(user.name).split(" ")[0],
+        resetUrl: `${appUrl()}/reset-password?token=${token}`,
+      });
+      const result = await sendEmail({ to: user.email, ...mail });
+      if (result && "error" in result && result.error) {
+        return { error: "Could not send the reset email. Try again in a minute." };
+      }
     }
+    return { ok: true as const };
+  } catch (error) {
+    console.error("Password reset failed", error);
+    return { error: "Could not send the reset email. Check that the database and Resend key are set on Vercel, then try again." };
   }
-
-  return { ok: true as const };
 }
 
 export async function resetPasswordAction(formData: FormData) {

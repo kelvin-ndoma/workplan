@@ -25,24 +25,31 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!email || !password) return null;
         if (!isAllowedWorkEmail(email)) return null;
 
-        await connectDB();
-        const user = await User.findOne({ email, isActive: true });
-        if (!user) return null;
+        try {
+          await connectDB();
+          const user = await User.findOne({ email, isActive: true }).select(
+            "name email role avatar jobTitle departmentId managerId passwordHash",
+          );
+          if (!user) return null;
 
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
+          const valid = await bcrypt.compare(password, user.passwordHash);
+          if (!valid) return null;
 
-        return {
-          id: String(user._id),
-          name: user.name,
-          email: user.email,
-          role: user.role as Role,
-          avatar: user.avatar,
-          jobTitle: user.jobTitle,
-          departmentId: user.departmentId ? String(user.departmentId) : undefined,
-          managerId: user.managerId ? String(user.managerId) : undefined,
-          remember: String(credentials?.remember ?? "") === "true",
-        };
+          return {
+            id: String(user._id),
+            name: user.name,
+            email: user.email,
+            role: user.role as Role,
+            avatar: user.avatar,
+            jobTitle: user.jobTitle,
+            departmentId: user.departmentId ? String(user.departmentId) : undefined,
+            managerId: user.managerId ? String(user.managerId) : undefined,
+            remember: String(credentials?.remember ?? "") === "true",
+          };
+        } catch (error) {
+          console.error("Login authorize failed", error);
+          return null;
+        }
       },
     }),
   ],

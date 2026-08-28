@@ -1,15 +1,8 @@
 import { Resend } from "resend";
 import { isAllowedWorkEmail } from "@/lib/allowed-email";
+import { appUrl } from "@/lib/app-url";
 
-export function appUrl() {
-  const explicit = (process.env.AUTH_URL || process.env.APP_URL || "").replace(/\/$/, "");
-  if (explicit) return explicit;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`;
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("AUTH_URL is required in production so invite links are correct.");
-  }
-  return "http://localhost:3000";
-}
+export { appUrl };
 
 export function isEmailConfigured() {
   return Boolean(process.env.RESEND_API_KEY);

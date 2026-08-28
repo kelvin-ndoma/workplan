@@ -1,5 +1,8 @@
 import type { NextAuthConfig } from "next-auth";
+import { applyProductionAuthUrl } from "@/lib/app-url";
 import type { Role } from "@/types";
+
+applyProductionAuthUrl();
 
 const secret = process.env.AUTH_SECRET;
 if (!secret || secret.length < 32) {
