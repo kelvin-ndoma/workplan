@@ -6,6 +6,7 @@ import { serialize } from "@/lib/serialize";
 import { formatMonthLabel } from "@/lib/dates";
 import { summarizeTasks } from "@/lib/queries";
 import { Activity, Meeting, Project, Task, User } from "@/models";
+import { STATUS_HEADERS } from "@/lib/status-headers";
 
 export type ReportKind =
   | "individual"
@@ -175,10 +176,10 @@ export async function buildDocx(data: Awaited<ReturnType<typeof getReportData>>)
           new TableRow({
             tableHeader: true,
             children: [
-              cell("Goal / Deliverable", 2200, true),
-              cell("Actions Taken Since Last Meeting", 2300, true),
-              cell("Actions Planned Before Next Meeting", 2300, true),
-              cell("Support Needed", 1880, true),
+              cell(STATUS_HEADERS.goal + " / Deliverable", 2200, true),
+              cell(STATUS_HEADERS.taken, 2300, true),
+              cell(STATUS_HEADERS.planned, 2300, true),
+              cell(STATUS_HEADERS.support, 1880, true),
               cell("% Complete", 1400, true),
             ],
           }),
@@ -230,7 +231,7 @@ export async function buildPdf(data: Awaited<ReturnType<typeof getReportData>>) 
 
   autoTable(doc, {
     startY: 96,
-    head: [["Person", "Goal / Deliverable", "Actions Taken", "Planned", "Support Needed", "%"]],
+    head: [["Person", STATUS_HEADERS.goal, STATUS_HEADERS.taken, STATUS_HEADERS.planned, STATUS_HEADERS.support, "%"]],
     body: data.rows.map((row) => [
       row.person,
       `${row.project}\n${row.deliverable}`,
@@ -255,9 +256,9 @@ export function buildCsv(data: Awaited<ReturnType<typeof getReportData>>) {
     "Person",
     "Project",
     "Goal / Deliverable",
-    "Actions Taken Since Last Meeting",
-    "Actions Planned Before Next Meeting",
-    "Support Needed",
+    STATUS_HEADERS.taken,
+    STATUS_HEADERS.planned,
+    STATUS_HEADERS.support,
     "% Complete",
   ];
   const escape = (value: string) => `"${value.replaceAll('"', '""')}"`;

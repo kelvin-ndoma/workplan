@@ -6,6 +6,7 @@ import { formatShortDate } from "@/lib/dates";
 import { PageHeader, ProgressBar, StatusBadge } from "@/components/work-ui";
 import { QuickUpdateForm } from "@/components/tasks/quick-update";
 import { CommentThread } from "@/components/comments";
+import { STATUS_HEADERS } from "@/lib/status-headers";
 import type { TaskStatus } from "@/types";
 
 export default async function TaskPage({ params }: { params: Promise<{ id: string }> }) {
@@ -53,10 +54,10 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           </div>
         </div>
         <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <Block title="Actions taken" items={(task.actionsTaken as string[]) ?? []} />
-          <Block title="Next actions" items={((task.nextActions as string[]) ?? []).length ? (task.nextActions as string[]) : [String(task.nextAction || "")]} />
+          <Block title={STATUS_HEADERS.taken} items={(task.actionsTaken as string[]) ?? []} />
+          <Block title={STATUS_HEADERS.planned} items={((task.nextActions as string[]) ?? []).length ? (task.nextActions as string[]) : [String(task.nextAction || "")]} />
           <div className="rounded-2xl border bg-card p-4">
-            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">Support / blocker</p>
+            <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">{STATUS_HEADERS.support}</p>
             <p className="mt-2 text-sm">{String(task.supportDescription || "None")}</p>
             {task.blocker ? <p className="mt-2 text-sm text-red-700">{String(task.blocker)}</p> : null}
           </div>

@@ -44,8 +44,8 @@ export const authConfig = {
     async session({ session, token }) {
       if (session.user) {
         session.user.id = String(token.id ?? "");
-        session.user.name = token.name;
-        session.user.email = token.email;
+        session.user.name = token.name ?? "";
+        session.user.email = token.email ?? "";
         session.user.role = token.role as Role;
         session.user.avatar = token.avatar as string | undefined;
         session.user.jobTitle = token.jobTitle as string | undefined;

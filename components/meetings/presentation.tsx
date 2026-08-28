@@ -25,6 +25,7 @@ import { ProgressBar } from "@/components/work-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { STATUS_HEADERS } from "@/lib/status-headers";
 import type { PresentationMode, SlideType } from "@/types";
 
 type Member = {
@@ -161,11 +162,15 @@ function BriefSlide({ member }: { member: Member }) {
             </div>
             <div className="mt-3 grid gap-2 text-sm text-white/80 md:grid-cols-3">
               <div>
-                <p className="text-[11px] font-semibold tracking-wide text-white/45 uppercase">Taken</p>
+                <p className="text-[11px] font-semibold tracking-wide text-white/45 uppercase">
+                  {STATUS_HEADERS.taken}
+                </p>
                 <p>{((task.actionsTaken ?? []).join(" · ")) || "—"}</p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold tracking-wide text-white/45 uppercase">Planned</p>
+                <p className="text-[11px] font-semibold tracking-wide text-white/45 uppercase">
+                  {STATUS_HEADERS.planned}
+                </p>
                 <p>
                   {(task.nextActions?.length
                     ? task.nextActions
@@ -176,7 +181,9 @@ function BriefSlide({ member }: { member: Member }) {
                 </p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold tracking-wide text-white/45 uppercase">Support</p>
+                <p className="text-[11px] font-semibold tracking-wide text-white/45 uppercase">
+                  {STATUS_HEADERS.support}
+                </p>
                 <p>{task.blocker || task.supportDescription || "N/A"}</p>
               </div>
             </div>

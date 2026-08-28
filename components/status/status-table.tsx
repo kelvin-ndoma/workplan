@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ProgressBar, StatusBadge } from "@/components/work-ui";
 import { linesToText } from "@/lib/briefing";
 import { isEditableMeetingDate } from "@/lib/meetings/cadence";
+import { STATUS_HEADERS } from "@/lib/status-headers";
 import type { TaskStatus } from "@/types";
 
 const statuses: TaskStatus[] = ["NOT_STARTED", "IN_PROGRESS", "AT_RISK", "BLOCKED", "COMPLETED"];
@@ -75,14 +76,14 @@ export function StatusTable({
         <section key={stream}>
           <h2 className="mb-3 text-sm font-medium text-muted-foreground">{stream}</h2>
           <div className="overflow-x-auto rounded-xl border bg-card">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b bg-muted/40 text-xs text-muted-foreground">
+            <table className="w-full min-w-[960px] text-left text-sm">
+              <thead className="border-b bg-muted/40 text-[11px] leading-tight text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-2.5 font-medium">Goal</th>
-                  <th className="px-4 py-2.5 font-medium">Actions taken</th>
-                  <th className="px-4 py-2.5 font-medium">Actions planned</th>
-                  <th className="px-4 py-2.5 font-medium">Support needed</th>
-                  <th className="px-4 py-2.5 font-medium">Status</th>
+                  <th className="px-4 py-2.5 font-semibold tracking-wide uppercase">{STATUS_HEADERS.goal}</th>
+                  <th className="px-4 py-2.5 font-semibold tracking-wide uppercase">{STATUS_HEADERS.taken}</th>
+                  <th className="px-4 py-2.5 font-semibold tracking-wide uppercase">{STATUS_HEADERS.planned}</th>
+                  <th className="px-4 py-2.5 font-semibold tracking-wide uppercase">{STATUS_HEADERS.support}</th>
+                  <th className="px-4 py-2.5 font-semibold tracking-wide uppercase">{STATUS_HEADERS.status}</th>
                 </tr>
               </thead>
               <tbody>
@@ -196,7 +197,7 @@ function StatusRow({
               }}
             >
               <label className="grid gap-1 text-xs font-medium">
-                Actions taken
+                {STATUS_HEADERS.taken}
                 <Textarea
                   name="actionsTaken"
                   rows={4}
@@ -204,7 +205,7 @@ function StatusRow({
                 />
               </label>
               <label className="grid gap-1 text-xs font-medium">
-                Actions planned
+                {STATUS_HEADERS.planned}
                 <Textarea
                   name="nextActions"
                   rows={4}
@@ -215,7 +216,7 @@ function StatusRow({
                 />
               </label>
               <label className="grid gap-1 text-xs font-medium md:col-span-2">
-                Support needed
+                {STATUS_HEADERS.support}
                 <Textarea name="support" rows={2} defaultValue={support === "N/A" ? "" : support} />
               </label>
               <label className="grid gap-1 text-xs font-medium">
