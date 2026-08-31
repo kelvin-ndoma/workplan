@@ -14,7 +14,7 @@ export default async function LoginPage({
       <p className="text-lg font-semibold lg:hidden">WorkPlan</p>
       <h2 className="mt-2 text-2xl font-semibold">Sign in</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Enter your Burns Brothers email and password.
+        Enter your Burns Brothers email and password. If you were invited today, open the email first and set your password.
       </p>
       <LoginForm callbackUrl={safeInternalPath(callbackUrl)} error={error} reset={reset} />
     </AuthShell>

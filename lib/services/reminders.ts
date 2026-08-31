@@ -14,6 +14,7 @@ import {
   appUrl,
   assignmentEmail,
   callReminderEmail,
+  firstNameFrom,
   isEmailConfigured,
   sendEmail,
 } from "@/lib/email";
@@ -32,14 +33,14 @@ export async function sendAssignmentEmail(input: {
   if (!assignee?.email) return { skipped: true as const };
   const origin = appUrl();
   const mail = assignmentEmail({
-    assigneeName: String(assignee.name).split(" ")[0],
+    assigneeName: firstNameFrom(assignee.name, assignee.email),
     assignerName: input.assignerName,
     title: input.title,
     monthLabel: formatMonthLabel(input.month),
     taskUrl: `${origin}/tasks/${input.taskId}`,
     statusUrl: `${origin}/my-work`,
   });
-  return sendEmail({ to: assignee.email, ...mail });
+  return sendEmail({ to: String(assignee.email), toName: String(assignee.name), ...mail });
 }
 
 export async function sendCallReminders(options?: { force?: boolean; actorId?: string }) {
@@ -74,20 +75,24 @@ export async function sendCallReminders(options?: { force?: boolean; actorId?: s
             : `${dayName} call tomorrow`,
       message:
         kind === "CALL_HOUR_BEFORE"
-          ? `The team call starts in about an hour at ${MEETING_TIME_LABEL}. Update your status now.`
-          : "Update your status before we meet at 3:30 PM EAT / 8:30 AM ET. One person shares the Share screen tab in Teams.",
+          ? `Remember to update your status. The call starts in about an hour at ${MEETING_TIME_LABEL}.`
+          : `Remember to update your status before we meet at ${MEETING_TIME_LABEL}.`,
       link: `/my-work?meeting=${meetingDate}`,
     });
     if (person.email) {
       const mail = callReminderEmail({
-        name: String(person.name).split(" ")[0],
+        name: firstNameFrom(person.name, person.email),
         dayName,
         dateLabel,
         kind,
         statusUrl: `${origin}/my-work?meeting=${meetingDate}`,
         shareUrl: `${origin}/brief?meeting=${meetingDate}`,
       });
-      const result = await sendEmail({ to: person.email, ...mail });
+      const result = await sendEmail({
+        to: String(person.email),
+        toName: String(person.name),
+        ...mail,
+      });
       if ("sent" in result && result.sent) sent += 1;
     }
   }
@@ -137,22 +142,26 @@ export async function sendUpdateStatusReminders(options: {
     await notify({
       userId: String(person._id),
       type: "UPDATE_STATUS",
-      title: `Please update your status for ${formatMeetingDateLong(meetingDate)}`,
+      title: `Remember to update your status for ${formatMeetingDateLong(meetingDate)}`,
       message: `Next call is ${dayName}, ${dateLabel} at ${MEETING_TIME_LABEL}. Save your update so Share screen is current.`,
       link: `/my-work?meeting=${meetingDate}`,
     });
     if (person.email) {
       const mail = callReminderEmail({
-        name: String(person.name).split(" ")[0],
+        name: firstNameFrom(person.name, person.email),
         dayName,
         dateLabel,
         kind: "UPDATE_STATUS",
         statusUrl: `${origin}/my-work?meeting=${meetingDate}`,
         shareUrl: `${origin}/brief?meeting=${meetingDate}`,
         note,
-        senderName: options.actorName.split(" ")[0],
+        senderName: firstNameFrom(options.actorName),
       });
-      const result = await sendEmail({ to: person.email, ...mail });
+      const result = await sendEmail({
+        to: String(person.email),
+        toName: String(person.name),
+        ...mail,
+      });
       if ("sent" in result && result.sent) sent += 1;
       else if ("error" in result) failed += 1;
     }

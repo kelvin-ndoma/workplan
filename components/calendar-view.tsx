@@ -15,7 +15,7 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { isMeetingDateKey, lastCompletedMeetingDateKey, MEETING_TIME_LABEL, nextMeetingDateKey } from "@/lib/meetings/cadence";
+import { isMeetingDateKey, MEETING_TIME_LABEL, nextMeetingDateKey, presentMeetingDateKey } from "@/lib/meetings/cadence";
 
 type CalItem = {
   id: string;
@@ -30,8 +30,8 @@ export function WorkCalendar({ items }: { items: CalItem[] }) {
   const [anchor, setAnchor] = useState(new Date());
   const [view, setView] = useState<"month" | "week" | "day">("month");
   const nextKey = nextMeetingDateKey();
-  const currentKey = lastCompletedMeetingDateKey();
-  const sameCall = currentKey === nextKey;
+  const presentKey = presentMeetingDateKey();
+  const sameCall = Boolean(presentKey) && presentKey === nextKey;
 
   const days = useMemo(() => {
     if (view === "day") return [anchor];
@@ -77,7 +77,7 @@ export function WorkCalendar({ items }: { items: CalItem[] }) {
       <div className="flex flex-wrap items-center gap-4 text-[11px]">
         <span className="inline-flex items-center gap-1.5">
           <span className="size-2.5 rounded-sm bg-indigo-500" />
-          Current call
+          Today’s call
         </span>
         {!sameCall ? (
           <span className="inline-flex items-center gap-1.5">
@@ -112,9 +112,9 @@ export function WorkCalendar({ items }: { items: CalItem[] }) {
             return isSameDay(new Date(item.date), day);
           });
           const meetingDay = isMeetingDateKey(key);
-          const isCurrent = key === currentKey;
+          const isPresent = Boolean(presentKey) && key === presentKey;
           const isNext = key === nextKey && !sameCall;
-          const callKind = isCurrent ? "current" : isNext ? "next" : meetingDay ? "other" : null;
+          const callKind = isPresent ? "current" : isNext ? "next" : meetingDay ? "other" : null;
           return (
             <div
               key={key}
@@ -148,7 +148,7 @@ export function WorkCalendar({ items }: { items: CalItem[] }) {
                       callKind === "other" && "text-teal-800",
                     )}
                   >
-                    {callKind === "current" ? "Current" : callKind === "next" ? "Next" : "Call"}
+                    {callKind === "current" ? "Today" : callKind === "next" ? "Next" : "Call"}
                   </Link>
                 ) : null}
               </div>
@@ -186,7 +186,7 @@ export function WorkCalendar({ items }: { items: CalItem[] }) {
                   >
                     {item.kind === "call"
                       ? callKind === "current"
-                        ? "Current call"
+                        ? "Today’s call"
                         : callKind === "next"
                           ? "Next call"
                           : item.title

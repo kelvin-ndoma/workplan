@@ -5,6 +5,7 @@ import { canAssignWork } from "@/lib/permissions";
 import { PageHeader, ProgressBar, StatCard } from "@/components/work-ui";
 import { MeetingLinkBar } from "@/components/layout/topbar";
 import { StatusTable } from "@/components/status/status-table";
+import { UpcomingMeetingHint } from "@/components/status/upcoming-meeting-hint";
 import { Button } from "@/components/ui/button";
 import {
   formatMeetingDateLong,
@@ -53,6 +54,7 @@ export default async function MyWorkPage({
           </>
         }
       />
+      <UpcomingMeetingHint viewing={meeting} />
       <div className="mb-6">
         <MeetingLinkBar meeting={meeting} pathname="/my-work" />
       </div>

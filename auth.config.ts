@@ -18,7 +18,7 @@ export const authConfig = {
   secret,
   session: {
     strategy: "jwt",
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: 60 * 60 * 24 * 7,
     updateAge: 60 * 60,
   },
   useSecureCookies: secure,
@@ -36,9 +36,10 @@ export const authConfig = {
         token.departmentId = user.departmentId;
         token.managerId = user.managerId;
         token.remember = Boolean(user.remember);
+        token.credentialsVersion = user.credentialsVersion ?? 0;
         token.loginAt = Math.floor(Date.now() / 1000);
       }
-      const maxAge = token.remember ? 60 * 60 * 24 * 30 : 60 * 60 * 12;
+      const maxAge = token.remember ? 60 * 60 * 24 * 7 : 60 * 60 * 12;
       if (typeof token.loginAt === "number") {
         token.exp = token.loginAt + maxAge;
       }
@@ -54,6 +55,7 @@ export const authConfig = {
         session.user.jobTitle = token.jobTitle as string | undefined;
         session.user.departmentId = token.departmentId as string | undefined;
         session.user.managerId = token.managerId as string | undefined;
+        session.user.credentialsVersion = Number(token.credentialsVersion ?? 0);
       }
       return session;
     },

@@ -82,7 +82,6 @@ export function LoginForm({
           <input
             type="checkbox"
             name="remember"
-            defaultChecked
             className="size-3.5 accent-primary"
           />
           Keep me signed in

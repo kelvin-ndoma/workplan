@@ -19,6 +19,7 @@ import {
 } from "@/models";
 import { sortByBriefingOrder } from "@/lib/briefing";
 import { isLeadership } from "@/lib/permissions";
+import { needsActivationInvite } from "@/lib/invite";
 import type { SessionUser } from "@/types";
 import { applyMeetingSnapshots, freezeLiveIfMissing, snapshotsForTasks } from "@/lib/meeting-status";
 import {
@@ -38,10 +39,34 @@ export async function getUsers() {
   await connectDB();
   return serialize<Array<Record<string, unknown>>>(
     await User.find({ isActive: true })
-      .select("name email role avatar jobTitle departmentId managerId isActive passwordResetExpires")
+      .select("name email role avatar jobTitle departmentId managerId isActive invitePending passwordResetExpires")
       .sort({ name: 1 })
       .lean(),
   );
+}
+
+export async function getAdminTeam() {
+  await connectDB();
+  const rows = await User.find({ isActive: true })
+    .select("name email role avatar jobTitle invitePending passwordResetExpires passwordHash")
+    .sort({ name: 1 })
+    .lean();
+
+  const team = [];
+  for (const row of rows) {
+    const needsInvite = await needsActivationInvite(row);
+    team.push({
+      id: String(row._id),
+      name: String(row.name),
+      email: String(row.email),
+      role: row.role,
+      jobTitle: row.jobTitle ? String(row.jobTitle) : undefined,
+      invitePending: Boolean(row.invitePending),
+      passwordResetExpires: row.passwordResetExpires ? new Date(row.passwordResetExpires).toISOString() : undefined,
+      needsInvite,
+    });
+  }
+  return team;
 }
 
 export async function getProjectsForUser(user: SessionUser) {

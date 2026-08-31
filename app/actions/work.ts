@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/session";
 import { canAssignWork, canCreateProjects, canUpdateTask, isLeadership } from "@/lib/permissions";
@@ -39,7 +38,8 @@ import { sendAssignmentEmail } from "@/lib/services/reminders";
 import { saveMeetingStatus } from "@/lib/meeting-status";
 import { nextMeetingDateKey, resolveMeetingDateKey } from "@/lib/meetings/cadence";
 import { isEmailConfigured } from "@/lib/email";
-import { sendAccountInvite } from "@/lib/invite";
+import { sendAccountInvite, needsActivationInvite } from "@/lib/invite";
+import { hashPassword, passwordPolicyError } from "@/lib/password";
 import type { TaskStatus } from "@/types";
 
 function revalidateWork() {
@@ -55,27 +55,29 @@ function revalidateWork() {
 
 export async function createUserAction(input: unknown) {
   const actor = await requireRole(["ADMIN"]);
+  if (!isEmailConfigured()) {
+    return { error: "Email is not set up yet. Add RESEND_API_KEY on Vercel before inviting people." };
+  }
   const data = userSchema.parse(input);
   await connectDB();
   const existing = await User.findOne({ email: data.email.toLowerCase() });
   if (existing) return { error: "Email already in use." };
-  const providedPassword = data.password?.trim();
-  const passwordHash = await bcrypt.hash(
-    providedPassword || (isEmailConfigured() ? randomBytes(24).toString("hex") : "WorkPlan2026!"),
-    10,
-  );
   const user = await User.create({
-    ...data,
+    name: data.name,
     email: data.email.toLowerCase(),
-    passwordHash,
+    role: data.role,
+    jobTitle: data.jobTitle,
+    departmentId: data.departmentId,
+    managerId: data.managerId,
     isActive: data.isActive ?? true,
+    passwordHash: await hashPassword(randomBytes(32).toString("hex")),
+    invitePending: true,
+    credentialsVersion: 0,
   });
-  if (!providedPassword && isEmailConfigured()) {
-    const invite = await sendAccountInvite(String(user._id));
-    if (invite && "error" in invite && invite.error) {
-      revalidatePath("/admin");
-      return { id: String(user._id), invited: false, error: invite.error };
-    }
+  const invite = await sendAccountInvite(String(user._id));
+  if (invite && "error" in invite && invite.error) {
+    revalidatePath("/admin");
+    return { id: String(user._id), invited: false, error: invite.error };
   }
   await writeAudit({
     actorId: actor.id,
@@ -85,11 +87,14 @@ export async function createUserAction(input: unknown) {
     details: { email: user.email, role: user.role },
   });
   revalidatePath("/admin");
-  return { id: String(user._id), invited: Boolean(!providedPassword && isEmailConfigured()) };
+  return { id: String(user._id), invited: true };
 }
 
 export async function inviteUserAction(userId: string) {
   const actor = await requireRole(["ADMIN"]);
+  if (userId === actor.id) {
+    return { error: "Use Settings or Forgot password to change your own password." };
+  }
   const result = await sendAccountInvite(userId);
   if (result && "error" in result && result.error) return result;
   await writeAudit({
@@ -106,10 +111,16 @@ export async function inviteUserAction(userId: string) {
 export async function inviteTeamAction() {
   const actor = await requireRole(["ADMIN"]);
   await connectDB();
-  const people = await User.find({ isActive: true, _id: { $ne: actor.id } }).select("name email").lean();
+  const people = await User.find({
+    isActive: true,
+    _id: { $ne: actor.id },
+  })
+    .select("name email invitePending passwordHash")
+    .lean();
   let sent = 0;
   let failed = 0;
   for (const person of people) {
+    if (!(await needsActivationInvite(person))) continue;
     const result = await sendAccountInvite(String(person._id));
     if (result && "ok" in result && result.ok) {
       sent += 1;
@@ -145,7 +156,11 @@ export async function updateUserAction(id: string, input: unknown) {
 
   const updates: Record<string, unknown> = { ...data };
   if (data.password) {
-    updates.passwordHash = await bcrypt.hash(data.password, 10);
+    const policy = passwordPolicyError(data.password);
+    if (policy) return { error: policy };
+    updates.passwordHash = await hashPassword(data.password);
+    updates.credentialsVersion = Number(current.credentialsVersion ?? 0) + 1;
+    updates.invitePending = false;
   }
   delete updates.password;
   if (data.managerId === "") updates.managerId = null;

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 function authorized(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
+  if (!secret || secret.length < 16) return false;
   const header = request.headers.get("authorization") ?? "";
   const sent = header.startsWith("Bearer ") ? header.slice(7) : "";
   const left = createHash("sha256").update(sent).digest();

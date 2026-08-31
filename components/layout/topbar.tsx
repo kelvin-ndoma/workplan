@@ -8,9 +8,9 @@ import { cn } from "@/lib/utils";
 import {
   followingMeetingDateKey,
   formatMeetingDateLabel,
-  lastCompletedMeetingDateKey,
   MEETING_TIME_LABEL,
   nextMeetingDateKey,
+  presentMeetingDateKey,
   previousMeetingDateKey,
   recentMeetingDateKeys,
 } from "@/lib/meetings/cadence";
@@ -70,7 +70,7 @@ export function MeetingLinkBar({
   const prev = previousMeetingDateKey(meeting);
   const next = followingMeetingDateKey(meeting);
   const working = nextMeetingDateKey();
-  const current = lastCompletedMeetingDateKey();
+  const present = presentMeetingDateKey();
   const isWorking = meeting === working;
   const recent = recentMeetingDateKeys(8);
 
@@ -85,9 +85,11 @@ export function MeetingLinkBar({
           <p className="text-[11px] text-muted-foreground">
             {meeting > working
               ? "Upcoming call"
-              : isWorking
-                ? `Next call · ${MEETING_TIME_LABEL}`
-                : "Past call · view only"}
+              : present && meeting === present
+                ? `Today’s call · ${MEETING_TIME_LABEL}`
+                : isWorking
+                  ? `Next call · ${MEETING_TIME_LABEL}`
+                  : "Past call · view only"}
           </p>
         </div>
         <Button variant="outline" size="sm" render={<Link href={`${pathname}?meeting=${next}`} />}>
@@ -97,8 +99,8 @@ export function MeetingLinkBar({
       <div className="flex flex-wrap gap-1.5">
         {recent.map((key) => {
           const active = key === meeting;
-          const isCurrent = key === current && key !== working;
-          const isNext = key === working;
+          const isPresent = Boolean(present) && key === present;
+          const isNext = key === working && key !== present;
           const isUpcoming = key > working;
           return (
             <Link
@@ -106,16 +108,16 @@ export function MeetingLinkBar({
               href={`${pathname}?meeting=${key}`}
               className={cn(
                 "rounded-full px-2.5 py-1 text-[11px] font-medium",
-                isCurrent && "bg-indigo-600 text-white",
+                isPresent && "bg-indigo-600 text-white",
                 isNext && "bg-amber-500 text-white",
                 isUpcoming && !active && "border border-amber-200 bg-amber-50 text-amber-900 hover:border-amber-300",
-                !isCurrent && !isNext && !isUpcoming && active && "bg-primary text-primary-foreground",
-                !isCurrent && !isNext && !isUpcoming && !active && "border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground",
+                !isPresent && !isNext && !isUpcoming && active && "bg-primary text-primary-foreground",
+                !isPresent && !isNext && !isUpcoming && !active && "border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground",
                 active && "ring-2 ring-foreground/25 ring-offset-1",
               )}
             >
               {formatMeetingDateLabel(key)}
-              {isCurrent ? " · current" : isNext ? " · next" : isUpcoming ? " · upcoming" : ""}
+              {isPresent ? " · today" : isNext ? " · next" : isUpcoming ? " · upcoming" : ""}
             </Link>
           );
         })}

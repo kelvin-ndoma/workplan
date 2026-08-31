@@ -35,7 +35,9 @@ export function SendReminderForm({
               toast.success(`In-app reminder sent to ${result.notified} people. Add RESEND_API_KEY to also email.`);
               return;
             }
-            toast.success(`Emailed ${result.emailed} of ${result.notified} people to update status for ${nextLabel}.`);
+            toast.success(
+              `Sent a personal reminder to ${result.emailed} of ${result.notified} teammates to update their status for ${nextLabel}.`,
+            );
           }
         });
       }}
@@ -51,11 +53,11 @@ export function SendReminderForm({
         />
       </div>
       <Button type="submit" disabled={pending}>
-        {pending ? "Sending…" : `Email the team (${recipientCount})`}
+        {pending ? "Sending…" : `Email each teammate (${recipientCount})`}
       </Button>
       {!emailConfigured ? (
         <p className="text-sm text-amber-800">
-          Email is not configured yet. The team will still get an in-app notification. Add RESEND_API_KEY in
+          Email is not configured yet. Each teammate will still get an in-app notification. Add RESEND_API_KEY in
           .env.local to send mail.
         </p>
       ) : null}

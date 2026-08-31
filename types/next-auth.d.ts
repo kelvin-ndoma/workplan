@@ -10,6 +10,7 @@ declare module "next-auth" {
       jobTitle?: string;
       departmentId?: string;
       managerId?: string;
+      credentialsVersion?: number;
     } & DefaultSession["user"];
   }
 
@@ -20,6 +21,7 @@ declare module "next-auth" {
     departmentId?: string;
     managerId?: string;
     remember?: boolean;
+    credentialsVersion?: number;
   }
 }
 
@@ -33,5 +35,6 @@ declare module "next-auth/jwt" {
     managerId?: string;
     remember?: boolean;
     loginAt?: number;
+    credentialsVersion?: number;
   }
 }

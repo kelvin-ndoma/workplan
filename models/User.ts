@@ -12,6 +12,8 @@ const UserSchema = new Schema(
     departmentId: { type: Schema.Types.ObjectId, ref: "Department" },
     managerId: { type: Schema.Types.ObjectId, ref: "User" },
     isActive: { type: Boolean, default: true },
+    invitePending: { type: Boolean, default: false },
+    credentialsVersion: { type: Number, default: 0 },
     passwordResetToken: { type: String, default: "" },
     passwordResetExpires: { type: Date },
   },

@@ -31,7 +31,7 @@ export default async function CommunicationPage() {
     <div>
       <PageHeader
         title="Communication"
-        description="Remind the team by email to update their status. An automatic email also goes out one hour before each call."
+        description="Each teammate gets their own email asking them to update their status. An automatic email also goes out one hour before each call."
         actions={
           <Button variant="outline" render={<Link href={`/my-work?meeting=${meeting}`} />}>
             Open next call status
@@ -50,10 +50,10 @@ export default async function CommunicationPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-2xl border bg-card p-5">
-          <h2 className="text-sm font-semibold tracking-wide uppercase">Remind the team</h2>
+          <h2 className="text-sm font-semibold tracking-wide uppercase">Remind each teammate</h2>
           <p className="mt-1 mb-4 text-sm text-muted-foreground">
-            Sends an email and an in-app notice asking everyone to update their WorkPlan status for{" "}
-            {formatMeetingDateLong(meeting)}.
+            Sends a separate email to every person below. Each one is asked to update their own WorkPlan
+            status for {formatMeetingDateLong(meeting)}.
           </p>
           {leadership ? (
             <SendReminderForm

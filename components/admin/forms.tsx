@@ -133,7 +133,15 @@ export function InviteTeammateForm({ emailConfigured }: { emailConfigured: boole
   );
 }
 
-export function SendInviteButton({ userId, email }: { userId: string; email: string }) {
+export function SendInviteButton({
+  userId,
+  email,
+  pendingInvite,
+}: {
+  userId: string;
+  email: string;
+  pendingInvite?: boolean;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -150,12 +158,12 @@ export function SendInviteButton({ userId, email }: { userId: string; email: str
             toast.error(result.error);
             return;
           }
-          toast.success(`Invite sent to ${email}.`);
+          toast.success(pendingInvite ? `Invite resent to ${email}.` : `Invite sent to ${email}.`);
           router.refresh();
         });
       }}
     >
-      {pending ? "Sending…" : "Send invite"}
+      {pending ? "Sending…" : pendingInvite ? "Resend invite" : "Send invite"}
     </Button>
   );
 }
@@ -188,7 +196,7 @@ export function InviteTeamButton({ count }: { count: number }) {
         });
       }}
     >
-      {pending ? "Sending…" : `Email the team (${count})`}
+      {pending ? "Sending…" : `Send invites (${count})`}
     </Button>
   );
 }

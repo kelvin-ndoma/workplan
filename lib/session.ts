@@ -12,9 +12,13 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     try {
       await connectDB();
       const live = await User.findById(session.user.id)
-        .select("name email role avatar jobTitle departmentId managerId isActive")
+        .select("name email role avatar jobTitle departmentId managerId isActive invitePending credentialsVersion")
         .lean();
       if (!live || live.isActive === false) return null;
+      if (live.invitePending) return null;
+      if (Number(live.credentialsVersion ?? 0) !== Number(session.user.credentialsVersion ?? 0)) {
+        return null;
+      }
       return {
         id: session.user.id,
         name: String(live.name ?? session.user.name ?? ""),

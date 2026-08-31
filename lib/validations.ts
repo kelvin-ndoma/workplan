@@ -15,7 +15,7 @@ export const userSchema = z.object({
     .string()
     .optional()
     .transform((value) => (value && value.trim().length ? value : undefined))
-    .pipe(z.string().min(8).optional()),
+    .pipe(z.string().min(10).optional()),
   role: z.enum(ROLES),
   jobTitle: z.string().optional(),
   departmentId: z.string().optional(),

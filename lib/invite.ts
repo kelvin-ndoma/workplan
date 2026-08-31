@@ -1,11 +1,20 @@
 import { createHash, randomBytes } from "crypto";
 import { addHours } from "date-fns";
 import { connectDB } from "@/lib/db";
-import { accountInviteEmail, appUrl, isEmailConfigured, sendEmail } from "@/lib/email";
+import { accountInviteEmail, appUrl, firstNameFrom, isEmailConfigured, sendEmail } from "@/lib/email";
+import { hashMatchesBlockedPassword } from "@/lib/password";
 import { User } from "@/models";
 
 function hashResetToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+export async function needsActivationInvite(user: {
+  invitePending?: boolean | null;
+  passwordHash?: string | null;
+}) {
+  if (user.invitePending) return true;
+  return hashMatchesBlockedPassword(user.passwordHash);
 }
 
 export async function sendAccountInvite(userId: string) {
@@ -16,16 +25,22 @@ export async function sendAccountInvite(userId: string) {
   await connectDB();
   const user = await User.findById(userId);
   if (!user || !user.isActive) return { error: "Person not found." };
+  if (!(await needsActivationInvite(user))) {
+    return { error: "This person already activated their account. No new invite was sent." };
+  }
 
   const token = randomBytes(32).toString("hex");
   user.passwordResetToken = hashResetToken(token);
   user.passwordResetExpires = addHours(new Date(), 24);
+  user.invitePending = true;
+  user.credentialsVersion = Number(user.credentialsVersion ?? 0) + 1;
   await user.save();
 
   const result = await sendEmail({
-    to: user.email,
+    to: String(user.email),
+    toName: String(user.name),
     ...accountInviteEmail({
-      name: String(user.name).split(" ")[0],
+      name: firstNameFrom(user.name, user.email),
       resetUrl: `${appUrl()}/reset-password?token=${token}`,
       signInUrl: `${appUrl()}/login`,
     }),

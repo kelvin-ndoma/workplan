@@ -6,6 +6,7 @@ export const MEETING_END = "16:30";
 export const MEETING_TIME_LABEL = "3:30 PM EAT · 8:30 AM ET";
 export const MEETING_HOUR = 15;
 export const MEETING_MINUTE = 30;
+export const PRESENT_WINDOW_HOURS = 4;
 export const HOUR_BEFORE_REMINDER_LABEL = "2:30 PM EAT · 7:30 AM ET";
 
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
@@ -71,10 +72,29 @@ export function nairobiClock(now: Date = new Date()) {
   return { hour, minute };
 }
 
+function minutesSinceMidnight(now: Date = new Date()) {
+  const { hour, minute } = nairobiClock(now);
+  return hour * 60 + minute;
+}
+
+function meetingEndMinutes() {
+  return MEETING_HOUR * 60 + MEETING_MINUTE + PRESENT_WINDOW_HOURS * 60;
+}
+
 export function meetingPassedOnDate(key: string, now: Date = new Date()) {
   if (nairobiDateKey(now) !== key) return nairobiDateKey(now) > key;
-  const { hour, minute } = nairobiClock(now);
-  return hour > MEETING_HOUR || (hour === MEETING_HOUR && minute >= MEETING_MINUTE);
+  return minutesSinceMidnight(now) >= meetingEndMinutes();
+}
+
+export function isMeetingPresent(key: string, now: Date = new Date()) {
+  if (!isMeetingDateKey(key)) return false;
+  if (nairobiDateKey(now) !== key) return false;
+  return !meetingPassedOnDate(key, now);
+}
+
+export function presentMeetingDateKey(now: Date = new Date()) {
+  const today = nairobiDateKey(now);
+  return isMeetingPresent(today, now) ? today : null;
 }
 
 export function minutesUntilMeeting(now: Date = new Date()) {

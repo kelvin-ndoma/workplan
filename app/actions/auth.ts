@@ -7,9 +7,10 @@ import { AuthError } from "next-auth";
 import { redirect } from "next/navigation";
 import { signIn, signOut } from "@/auth";
 import { connectDB } from "@/lib/db";
-import { appUrl, isEmailConfigured, passwordResetEmail, sendEmail } from "@/lib/email";
+import { appUrl, firstNameFrom, isEmailConfigured, passwordResetEmail, sendEmail } from "@/lib/email";
 import { isAllowedWorkEmail } from "@/lib/allowed-email";
-import { rateLimit } from "@/lib/rate-limit";
+import { hashPassword, passwordPolicyError } from "@/lib/password";
+import { clientKey, rateLimit } from "@/lib/rate-limit";
 import { safeInternalPath } from "@/lib/safe-path";
 import { requireUser } from "@/lib/session";
 import { User } from "@/models/User";
@@ -27,9 +28,6 @@ export async function loginAction(formData: FormData) {
   const redirectTo = safeInternalPath(String(formData.get("callbackUrl") ?? "/"));
 
   if (!email || !password || !isAllowedWorkEmail(email)) {
-    redirect("/login?error=1");
-  }
-  if (!rateLimit(`login:${email}`, 8, 10 * 60 * 1000).ok) {
     redirect("/login?error=1");
   }
 
@@ -56,7 +54,8 @@ export async function requestPasswordResetAction(formData: FormData) {
     .trim()
     .toLowerCase();
   if (!email) return { error: "Enter your email." };
-  if (!rateLimit(`reset:${email}`, 5, 15 * 60 * 1000).ok) {
+  const resetGate = await rateLimit(await clientKey("reset", email), 5, 15 * 60 * 1000);
+  if (!resetGate.ok) {
     return { ok: true as const };
   }
   if (!isEmailConfigured()) {
@@ -75,10 +74,14 @@ export async function requestPasswordResetAction(formData: FormData) {
       user.passwordResetExpires = addHours(new Date(), 1);
       await user.save();
       const mail = passwordResetEmail({
-        name: String(user.name).split(" ")[0],
+        name: firstNameFrom(user.name, user.email),
         resetUrl: `${appUrl()}/reset-password?token=${token}`,
       });
-      const result = await sendEmail({ to: user.email, ...mail });
+      const result = await sendEmail({
+        to: String(user.email),
+        toName: String(user.name),
+        ...mail,
+      });
       if (result && "error" in result && result.error) {
         return { error: "Could not send the reset email. Try again in a minute." };
       }
@@ -96,8 +99,12 @@ export async function resetPasswordAction(formData: FormData) {
   const confirm = String(formData.get("confirm") ?? "");
 
   if (!token) return { error: "This reset link is invalid." };
-  if (password.length < 8) return { error: "Use at least 8 characters." };
+  const policy = passwordPolicyError(password);
+  if (policy) return { error: policy };
   if (password !== confirm) return { error: "Passwords do not match." };
+
+  const useGate = await rateLimit(`reset-token:${hashResetToken(token).slice(0, 16)}`, 8, 15 * 60 * 1000);
+  if (!useGate.ok) return { error: "Too many tries. Request a new link." };
 
   await connectDB();
   const user = await User.findOne({
@@ -111,8 +118,10 @@ export async function resetPasswordAction(formData: FormData) {
     { _id: user._id },
     {
       $set: {
-        passwordHash: await bcrypt.hash(password, 10),
+        passwordHash: await hashPassword(password),
         passwordResetToken: "",
+        invitePending: false,
+        credentialsVersion: Number(user.credentialsVersion ?? 0) + 1,
       },
       $unset: { passwordResetExpires: 1 },
     },
@@ -127,7 +136,8 @@ export async function changePasswordAction(formData: FormData) {
   const confirm = String(formData.get("confirm") ?? "");
 
   if (!current) return { error: "Enter your current password." };
-  if (password.length < 8) return { error: "Use at least 8 characters." };
+  const policy = passwordPolicyError(password);
+  if (policy) return { error: policy };
   if (password !== confirm) return { error: "Passwords do not match." };
   if (password === current) return { error: "Choose a different password." };
 
@@ -141,11 +151,13 @@ export async function changePasswordAction(formData: FormData) {
     { _id: account._id },
     {
       $set: {
-        passwordHash: await bcrypt.hash(password, 10),
+        passwordHash: await hashPassword(password),
         passwordResetToken: "",
+        invitePending: false,
+        credentialsVersion: Number(account.credentialsVersion ?? 0) + 1,
       },
       $unset: { passwordResetExpires: 1 },
     },
   );
-  return { ok: true as const };
+  redirect("/login?reset=1");
 }

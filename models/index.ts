@@ -13,3 +13,4 @@ export { AuditLog } from "./AuditLog";
 export { MonthFocus } from "./MonthFocus";
 export { ReminderLog } from "./ReminderLog";
 export { MeetingStatus } from "./MeetingStatus";
+export { RateLimit } from "./RateLimit";

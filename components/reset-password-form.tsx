@@ -52,7 +52,7 @@ export function ResetPasswordForm({ token }: { token?: string }) {
             type={showPassword ? "text" : "password"}
             autoComplete="new-password"
             required
-            minLength={8}
+            minLength={10}
             className="pr-9"
           />
           <button
@@ -73,7 +73,7 @@ export function ResetPasswordForm({ token }: { token?: string }) {
           type={showPassword ? "text" : "password"}
           autoComplete="new-password"
           required
-          minLength={8}
+          minLength={10}
           className="mt-1"
         />
       </div>

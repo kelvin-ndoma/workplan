@@ -1,5 +1,5 @@
 import { requireRole } from "@/lib/session";
-import { getUsers } from "@/lib/queries";
+import { getAdminTeam } from "@/lib/queries";
 import { sortByBriefingOrder } from "@/lib/briefing";
 import { isEmailConfigured } from "@/lib/email";
 import { PageHeader, UserAvatar } from "@/components/work-ui";
@@ -12,42 +12,48 @@ type TeamUser = {
   email: string;
   role: Role;
   jobTitle?: string;
+  invitePending?: boolean;
   passwordResetExpires?: string;
+  needsInvite: boolean;
 };
 
 export default async function AdminPage() {
   const actor = await requireRole(["ADMIN"]);
   const emailConfigured = isEmailConfigured();
   const users = sortByBriefingOrder(
-    (await getUsers()) as TeamUser[],
+    (await getAdminTeam()) as TeamUser[],
     (user) => user.name,
   );
-  const inviteCount = users.filter((user) => user.id !== actor.id).length;
+  const awaiting = users.filter((user) => user.id !== actor.id && user.needsInvite);
   const now = Date.now();
 
   return (
     <div>
       <PageHeader
         title="Team"
-        description="Invite people by email. They set a password and then sign in."
+        description="Send invite on anyone who has not set their own password yet. People who already activated do not get another email."
       />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,22rem)_1fr] lg:items-start">
         <section className="rounded-2xl border bg-card p-5">
           <h2 className="text-sm font-semibold tracking-wide uppercase">Invite teammate</h2>
           <p className="mt-1 mb-4 text-sm text-muted-foreground">
-            They will show up on My status, Team, and Share screen.
+            For someone who is not on the list yet. They get a 24-hour link to set a password and sign in.
           </p>
           <InviteTeammateForm emailConfigured={emailConfigured} />
         </section>
         <section className="rounded-2xl border bg-card p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-sm font-semibold tracking-wide uppercase">People</h2>
-            <InviteTeamButton count={inviteCount} />
+            {awaiting.length > 0 ? <InviteTeamButton count={awaiting.length} /> : null}
           </div>
           <div className="space-y-2">
             {users.map((user) => {
               const inviteOpen =
-                user.passwordResetExpires && new Date(user.passwordResetExpires).getTime() > now;
+                Boolean(user.invitePending) ||
+                Boolean(user.passwordResetExpires && new Date(user.passwordResetExpires).getTime() > now);
+              const expired =
+                Boolean(user.invitePending) &&
+                (!user.passwordResetExpires || new Date(user.passwordResetExpires).getTime() <= now);
               return (
                 <div
                   key={user.id}
@@ -60,13 +66,19 @@ export default async function AdminPage() {
                       <p className="truncate text-xs text-muted-foreground">
                         {user.jobTitle ? `${user.jobTitle} · ` : ""}
                         {user.email}
-                        {inviteOpen ? " · Invite sent" : ""}
+                        {user.needsInvite
+                          ? user.invitePending
+                            ? expired
+                              ? " · Invite expired"
+                              : " · Invite sent — not activated yet"
+                            : " · Needs to set a password"
+                          : " · Active"}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {user.id !== actor.id ? (
-                      <SendInviteButton userId={user.id} email={user.email} />
+                    {user.id !== actor.id && user.needsInvite ? (
+                      <SendInviteButton userId={user.id} email={user.email} pendingInvite={inviteOpen} />
                     ) : null}
                     <UserRoleSelect userId={user.id} role={user.role} />
                   </div>
