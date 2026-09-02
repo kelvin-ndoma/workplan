@@ -76,7 +76,9 @@ export async function sendCallReminders(options?: { force?: boolean; actorId?: s
       message:
         kind === "CALL_HOUR_BEFORE"
           ? `Remember to update your status. The call starts in about an hour at ${MEETING_TIME_LABEL}.`
-          : `Remember to update your status before we meet at ${MEETING_TIME_LABEL}.`,
+          : kind === "CALL_DAY_BEFORE"
+            ? `The ${dayName} call is tomorrow at ${MEETING_TIME_LABEL}. Remember to update your status.`
+            : `Remember to update your status before we meet at ${MEETING_TIME_LABEL}.`,
       link: `/my-work?meeting=${meetingDate}`,
     });
     if (person.email) {

@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
-    "remind": "tsx --env-file=.env.local scripts/remind.ts"
+    "remind": "tsx --env-file=.env.local scripts/remind.ts",
+    "move-meeting": "tsx --env-file=.env.local scripts/move-meeting.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

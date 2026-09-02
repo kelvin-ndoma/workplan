@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/db";
 import { nextMeetingDateKey, previousMeetingDateKey, recentMeetingDateKeys } from "@/lib/meetings/cadence";
+import { canonicalMeetingDate, MEETING_DATE_MOVES } from "@/lib/meetings/exceptions";
 import { MeetingStatus } from "@/models/MeetingStatus";
 import { Task } from "@/models/Task";
 
@@ -108,6 +109,10 @@ export function applyMeetingSnapshots(
     const exact = rows.find((row) => row.meetingDate === meetingDate);
     if (exact) return overlayStatus(task, snapshotFields(exact));
 
+    const movedFrom = Object.entries(MEETING_DATE_MOVES).find(([, to]) => to === meetingDate)?.[0];
+    const fromMoved = movedFrom ? rows.find((row) => row.meetingDate === movedFrom) : undefined;
+    if (fromMoved) return overlayStatus(task, snapshotFields(fromMoved));
+
     const prior = [...rows].reverse().find((row) => row.meetingDate < meetingDate);
     return overlayStatus(task, prior ? snapshotFields(prior) : fieldsFromTask(task));
   });
@@ -164,8 +169,9 @@ export async function saveMeetingStatus(input: {
   updateLive: boolean;
 }) {
   await connectDB();
+  const meetingDate = canonicalMeetingDate(input.meetingDate);
   if (input.updateLive) {
-    const previous = previousMeetingDateKey(input.meetingDate);
+    const previous = previousMeetingDateKey(meetingDate);
     const existingPrev = await MeetingStatus.findOne({
       taskId: input.taskId,
       meetingDate: previous,
@@ -185,7 +191,7 @@ export async function saveMeetingStatus(input: {
   }
 
   await MeetingStatus.findOneAndUpdate(
-    { taskId: input.taskId, meetingDate: input.meetingDate },
+    { taskId: input.taskId, meetingDate },
     {
       ...input.fields,
       updatedBy: input.updatedBy,

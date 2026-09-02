@@ -31,7 +31,7 @@ export default async function CommunicationPage() {
     <div>
       <PageHeader
         title="Communication"
-        description="Each teammate gets their own email asking them to update their status. An automatic email also goes out one hour before each call."
+        description="Each teammate gets their own email asking them to update their status. Automatic emails go out the day before each call, and again one hour before."
         actions={
           <Button variant="outline" render={<Link href={`/my-work?meeting=${meeting}`} />}>
             Open next call status
@@ -44,7 +44,8 @@ export default async function CommunicationPage() {
         <p className="mt-1 text-lg font-semibold">{formatMeetingDateLong(meeting)}</p>
         <p className="text-sm text-amber-900/80">{MEETING_TIME_LABEL}</p>
         <p className="mt-2 text-sm text-amber-900/80">
-          Automatic reminder: 2:30 PM EAT / 7:30 AM ET (one hour before the call), plus a morning note on call days.
+          Automatic reminders: the day before the call (Monday for Tuesday, Thursday for Friday) at 9:00 AM EAT /
+          2:00 AM ET, and again one hour before the call (2:30 PM EAT / 7:30 AM ET).
         </p>
       </div>
 

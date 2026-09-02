@@ -110,17 +110,23 @@ export function callReminderEmail(input: {
       ? `in about an hour (${input.dayName} at 3:30 PM EAT / 8:30 AM ET)`
       : input.kind === "CALL_DAY_OF"
         ? `today (${input.dayName}) at 3:30 PM EAT / 8:30 AM ET`
-        : `${input.dayName}, ${input.dateLabel} at 3:30 PM EAT / 8:30 AM ET`;
+        : input.kind === "CALL_DAY_BEFORE"
+          ? `tomorrow (${input.dayName}, ${input.dateLabel}) at 3:30 PM EAT / 8:30 AM ET`
+          : `${input.dayName}, ${input.dateLabel} at 3:30 PM EAT / 8:30 AM ET`;
   const subject =
     input.kind === "CALL_HOUR_BEFORE"
       ? `Call in 1 hour — please update your WorkPlan status`
       : input.kind === "CALL_DAY_OF"
         ? `Update your status before today's ${input.dayName} call`
-        : `Please update your WorkPlan status before the ${input.dayName} call`;
+        : input.kind === "CALL_DAY_BEFORE"
+          ? `Reminder: ${input.dayName} call tomorrow — update your WorkPlan status`
+          : `Please update your WorkPlan status before the ${input.dayName} call`;
   const note = input.note?.trim();
   const ask = input.senderName
     ? `${input.senderName} asked me to remind you: remember to update your WorkPlan status before the next call.`
-    : "Remember to update your WorkPlan status before the next call.";
+    : input.kind === "CALL_DAY_BEFORE"
+      ? "This is a reminder: the team call is tomorrow. Remember to update your WorkPlan status."
+      : "Remember to update your WorkPlan status before the next call.";
   const text = [
     `Hi ${input.name},`,
     "",

@@ -1,4 +1,7 @@
 import { format, parseISO } from "date-fns";
+import { extraMeetingDates, cancelledMeetingDates, canonicalMeetingDate } from "@/lib/meetings/exceptions";
+
+export { canonicalMeetingDate } from "@/lib/meetings/exceptions";
 
 export const MEETING_TZ = "Africa/Nairobi";
 export const MEETING_START = "15:30";
@@ -58,6 +61,8 @@ export function weekdayFromKey(key: string) {
 
 export function isMeetingDateKey(key: string) {
   if (!DATE_KEY.test(key)) return false;
+  if (cancelledMeetingDates().has(key)) return false;
+  if (extraMeetingDates().has(key)) return true;
   const day = weekdayFromKey(key);
   return day === 2 || day === 5;
 }
@@ -209,7 +214,10 @@ export function nextMeetingDate(from: Date = new Date()) {
 }
 
 export function resolveMeetingDateKey(value?: string | null) {
-  if (value && isMeetingDateKey(value)) return value;
+  if (value) {
+    const key = canonicalMeetingDate(value.slice(0, 10));
+    if (isMeetingDateKey(key)) return key;
+  }
   return nextMeetingDateKey();
 }
 
