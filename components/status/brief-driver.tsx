@@ -54,8 +54,8 @@ export function BriefDriver({
   }
 
   return (
-    <div className="flex h-screen bg-[oklch(0.975_0.006_250)]">
-      <aside className="flex w-56 shrink-0 flex-col border-r bg-white">
+    <div className="flex h-dvh bg-[oklch(0.975_0.006_250)]">
+      <aside className="hidden h-full w-56 shrink-0 flex-col border-r bg-white lg:flex xl:w-64">
         <div className="border-b px-4 py-4">
           <p className="text-xs font-medium text-muted-foreground">Anyone can drive this</p>
           <p className="mt-1 text-sm font-semibold">Share this tab in Teams</p>
@@ -88,21 +88,33 @@ export function BriefDriver({
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b bg-white px-6 py-4">
-          <div className="flex items-center gap-3">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-white px-3 py-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-3">
             <UserAvatar name={current.user.name} src={current.user.avatar} size="lg" />
-            <div>
-              <p className="text-2xl font-semibold tracking-tight">{current.user.name}</p>
-              <p className="text-sm text-muted-foreground">{current.user.jobTitle}</p>
+            <div className="min-w-0">
+              <p className="truncate text-lg font-semibold tracking-tight sm:text-2xl">{current.user.name}</p>
+              <p className="truncate text-sm text-muted-foreground">{current.user.jobTitle}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <select
+              className="h-8 max-w-[10rem] rounded-lg border bg-card px-2 text-sm lg:hidden"
+              value={index}
+              aria-label="Team member"
+              onChange={(event) => setIndex(Number(event.target.value))}
+            >
+              {people.map((member, i) => (
+                <option key={member.user.id} value={i}>
+                  {member.user.name.split(" ")[0]}
+                </option>
+              ))}
+            </select>
             {current.summary.blocked > 0 ? (
               <StatusBadge value="BLOCKED" />
             ) : current.summary.atRisk > 0 ? (
               <StatusBadge value="AT_RISK" />
             ) : null}
-            <p className="text-3xl font-semibold tabular-nums">{current.summary.progress}%</p>
+            <p className="text-2xl font-semibold tabular-nums sm:text-3xl">{current.summary.progress}%</p>
             <Button
               variant="outline"
               size="icon-sm"
@@ -113,8 +125,8 @@ export function BriefDriver({
             </Button>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          <div className="mb-5 grid max-w-xl grid-cols-4 gap-3 text-center text-sm">
+        <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-5">
+          <div className="mb-5 grid max-w-3xl grid-cols-2 gap-3 text-center text-sm sm:grid-cols-4">
             <Stat label="Done" value={current.summary.completed} />
             <Stat label="Active" value={current.summary.inProgress} />
             <Stat label="At risk" value={current.summary.atRisk} />
@@ -123,15 +135,15 @@ export function BriefDriver({
           <ProgressBar value={current.summary.progress} className="mb-6 h-2" />
           <StatusTable tasks={current.tasks} meetingDate={meetingDate} />
         </div>
-        <footer className="flex items-center justify-between border-t bg-white px-6 py-3">
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t bg-white px-3 py-3 sm:px-6">
           <Button variant="outline" disabled={index === 0} onClick={() => setIndex((value) => value - 1)}>
-            <ChevronLeft /> Previous
+            <ChevronLeft /> <span className="hidden sm:inline">Previous</span>
           </Button>
-          <p className="text-sm text-muted-foreground">
-            {index + 1} of {people.length} · share this tab · Next walks the team
+          <p className="order-last w-full text-center text-xs text-muted-foreground sm:order-none sm:w-auto sm:text-sm">
+            {index + 1} of {people.length} · share this tab
           </p>
           <Button disabled={index === people.length - 1} onClick={() => setIndex((value) => value + 1)}>
-            Next <ChevronRight />
+            <span className="hidden sm:inline">Next</span> <ChevronRight />
           </Button>
         </footer>
       </div>

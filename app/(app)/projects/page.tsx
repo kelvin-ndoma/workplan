@@ -20,7 +20,7 @@ export default async function ProjectsPage() {
           ) : null
         }
       />
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
         {projects.map((project) => (
           <Link key={String(project.id)} href={`/projects/${project.id}`} className="rounded-xl border bg-card p-5 transition-colors hover:border-primary/25">
             <div className="flex items-center justify-between">

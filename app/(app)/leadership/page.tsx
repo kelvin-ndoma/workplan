@@ -71,7 +71,7 @@ export default async function LeadershipPage({
           : "In-app alerts work now. Add RESEND_API_KEY in .env.local to also send email."}
       </div>
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard label="Team progress" value={`${summary.progress}%`} />
         <StatCard label="Completed" value={summary.completed} tone="success" />
         <StatCard label="In progress" value={summary.inProgress} tone="info" />
@@ -80,7 +80,7 @@ export default async function LeadershipPage({
         <StatCard label="Overdue" value={summary.overdue} tone="danger" />
       </div>
 
-      <div className="mb-6 grid gap-6 xl:grid-cols-[1fr_1fr]">
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
         <section className="rounded-xl border bg-card p-5">
           <MonthFocusForm month={month} summary={String(focusDoc?.summary ?? "")} />
           {focusDoc?.setBy?.name ? (

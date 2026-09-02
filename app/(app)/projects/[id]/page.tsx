@@ -34,7 +34,7 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         description={String(project.description || "")}
         actions={<StatusBadge value={String(project.status)} />}
       />
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Progress" value={`${Number(project.progress)}%`} />
         <StatCard label="Deliverables" value={(data.deliverables as unknown[]).length} />
         <StatCard label="Tasks" value={(data.summary as { total: number }).total} />

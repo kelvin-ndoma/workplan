@@ -142,10 +142,10 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div className="max-w-2xl">
+    <div className="mb-7 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="max-w-3xl min-w-0">
         {eyebrow ? <p className="mb-1 text-xs font-medium text-muted-foreground">{eyebrow}</p> : null}
-        <h1 className="text-[1.65rem] leading-tight font-semibold tracking-tight text-foreground">{title}</h1>
+        <h1 className="text-xl leading-tight font-semibold tracking-tight text-foreground sm:text-[1.65rem]">{title}</h1>
         {description ? <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}

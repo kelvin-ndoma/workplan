@@ -77,10 +77,10 @@ export function MeetingLinkBar({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="outline" size="sm" render={<Link href={`${pathname}?meeting=${prev}`} />}>
-          <ChevronLeft /> {formatMeetingDateLabel(prev)}
+        <Button variant="outline" size="sm" className="max-w-[46%] truncate sm:max-w-none" render={<Link href={`${pathname}?meeting=${prev}`} />}>
+          <ChevronLeft /> <span className="hidden sm:inline">{formatMeetingDateLabel(prev)}</span>
         </Button>
-        <div className="min-w-40 px-1 text-center">
+        <div className="min-w-0 flex-1 px-1 text-center sm:min-w-40 sm:flex-none">
           <p className="text-sm font-semibold">{formatMeetingDateLabel(meeting)}</p>
           <p className="text-[11px] text-muted-foreground">
             {meeting > working
@@ -92,8 +92,8 @@ export function MeetingLinkBar({
                   : "Past call · view only"}
           </p>
         </div>
-        <Button variant="outline" size="sm" render={<Link href={`${pathname}?meeting=${next}`} />}>
-          {formatMeetingDateLabel(next)} <ChevronRight />
+        <Button variant="outline" size="sm" className="max-w-[46%] truncate sm:max-w-none" render={<Link href={`${pathname}?meeting=${next}`} />}>
+          <span className="hidden sm:inline">{formatMeetingDateLabel(next)}</span> <ChevronRight />
         </Button>
       </div>
       <div className="flex flex-wrap gap-1.5">

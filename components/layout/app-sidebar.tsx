@@ -55,7 +55,7 @@ export function AppSidebar({
   const pathname = usePathname();
 
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col overflow-y-auto bg-[oklch(0.205_0.035_255)] text-white">
+    <aside className="flex h-full w-full shrink-0 flex-col overflow-y-auto bg-[oklch(0.205_0.035_255)] text-white">
       <div className="px-5 pt-6 pb-4">
         <Link href="/" className="block">
           <p className="text-lg font-semibold tracking-tight">WorkPlan</p>

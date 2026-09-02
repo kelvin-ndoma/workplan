@@ -119,7 +119,7 @@ export function WorkCalendar({ items }: { items: CalItem[] }) {
             <div
               key={key}
               className={cn(
-                "min-h-28 rounded-xl border p-2 text-left",
+                "min-h-20 rounded-xl border p-1.5 text-left sm:min-h-28 sm:p-2",
                 callKind === "current" && "border-indigo-300 bg-indigo-50 ring-2 ring-indigo-400/70",
                 callKind === "next" && "border-amber-300 bg-amber-50 ring-2 ring-amber-400/70",
                 callKind === "other" && "border-teal-100 bg-teal-50/45",

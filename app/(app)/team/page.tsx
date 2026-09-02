@@ -41,13 +41,13 @@ export default async function TeamPage({
       <div className="mb-6">
         <MeetingLinkBar meeting={meeting} pathname="/team" />
       </div>
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Team progress" value={`${data.summary.progress}%`} />
         <StatCard label="Completed" value={data.summary.completed} tone="success" />
         <StatCard label="Blocked" value={data.summary.blocked} tone="danger" />
         <StatCard label="At risk" value={data.summary.atRisk} tone="warning" />
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
         {data.members.map((member, index) => {
           const person = member.user as { id: string; name: string; jobTitle?: string; avatar?: string };
           return (

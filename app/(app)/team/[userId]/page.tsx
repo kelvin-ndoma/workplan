@@ -45,7 +45,7 @@ export default async function MemberPlanPage({
       <div className="mb-6">
         <MeetingLinkBar meeting={meeting} pathname={`/team/${userId}`} />
       </div>
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Progress" value={`${(data.summary as { progress: number }).progress}%`} />
         <StatCard label="Completed" value={(data.summary as { completed: number }).completed} tone="success" />
         <StatCard label="Blocked" value={(data.summary as { blocked: number }).blocked} tone="danger" />

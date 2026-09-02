@@ -49,7 +49,7 @@ export default async function CommunicationPage() {
         </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-2xl border bg-card p-5">
           <h2 className="text-sm font-semibold tracking-wide uppercase">Remind each teammate</h2>
           <p className="mt-1 mb-4 text-sm text-muted-foreground">

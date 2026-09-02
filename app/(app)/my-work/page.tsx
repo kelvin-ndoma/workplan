@@ -64,7 +64,7 @@ export default async function MyWorkPage({
           <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{String((focus as { summary: string }).summary)}</p>
         </div>
       ) : null}
-      <div className="mb-6 grid gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Progress" value={`${summary.progress}%`} />
         <StatCard label="In progress" value={summary.inProgress} tone="info" />
         <StatCard label="Blocked" value={summary.blocked} tone="danger" />
