@@ -3,6 +3,11 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   serverExternalPackages: ["mongoose", "resend"],
+  experimental: {
+    staleTimes: {
+      dynamic: 0,
+    },
+  },
   async headers() {
     return [
       {

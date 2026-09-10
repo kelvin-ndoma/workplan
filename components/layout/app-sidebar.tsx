@@ -7,7 +7,6 @@ import {
   CalendarDays,
   ClipboardList,
   FolderKanban,
-  LayoutDashboard,
   LogOut,
   Mail,
   Presentation,
@@ -30,7 +29,6 @@ const groups = [
       { href: "/brief", label: "Share screen", icon: Presentation, roles: ["ADMIN", "MANAGER", "TEAM_MEMBER"] },
       { href: "/calendar", label: "Calendar", icon: CalendarDays, roles: ["ADMIN", "MANAGER", "TEAM_MEMBER"] },
       { href: "/communication", label: "Communication", icon: Mail, roles: ["ADMIN", "MANAGER", "TEAM_MEMBER"] },
-      { href: "/leadership", label: "Focus", icon: LayoutDashboard, roles: ["ADMIN"] },
       { href: "/projects", label: "Projects", icon: FolderKanban, roles: ["ADMIN", "MANAGER", "TEAM_MEMBER"] },
     ],
   },
@@ -79,6 +77,7 @@ export function AppSidebar({
                     <Link
                       key={item.href}
                       href={item.href}
+                      prefetch={false}
                       className={cn(
                         "flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors",
                         active ? "bg-white/12 text-white" : "text-white/68 hover:bg-white/8 hover:text-white",

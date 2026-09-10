@@ -77,19 +77,19 @@ export function assignmentEmail(input: {
   const text = [
     `Hi ${input.assigneeName},`,
     "",
-    `${input.assignerName} assigned you a piece of the ${input.monthLabel} focus:`,
+    `${input.assignerName} assigned you a task for the ${input.monthLabel} focus:`,
     input.title,
     "",
     `Update your status here: ${input.statusUrl}`,
-    `Open the piece: ${input.taskUrl}`,
+    `Open the task: ${input.taskUrl}`,
     "",
     "WorkPlan",
   ].join("\n");
   const html = `
     <p>Hi ${input.assigneeName},</p>
-    <p><strong>${input.assignerName}</strong> assigned you a piece of the ${input.monthLabel} focus:</p>
+    <p><strong>${input.assignerName}</strong> assigned you a task for the ${input.monthLabel} focus:</p>
     <p style="font-size:18px;font-weight:600">${input.title}</p>
-    <p><a href="${input.statusUrl}">Update your status</a> · <a href="${input.taskUrl}">Open the piece</a></p>
+    <p><a href="${input.statusUrl}">Update your status</a> · <a href="${input.taskUrl}">Open the task</a></p>
     <p style="color:#667">WorkPlan · TBB Africa</p>
   `;
   return { subject, text, html };

@@ -58,7 +58,7 @@ export function StatusTable({
   if (tasks.length === 0) {
     return (
       <div className="rounded-xl border border-dashed px-5 py-8 text-center text-sm text-muted-foreground">
-        No pieces assigned yet.
+        No tasks assigned yet.
       </div>
     );
   }
@@ -89,7 +89,7 @@ export function StatusTable({
               <tbody>
                 {items.map((task) => (
                   <StatusRow
-                    key={`${String(task.id)}-${meetingDate ?? "live"}`}
+                    key={`${String(task.id)}-${meetingDate ?? "live"}-${Number(task.progress ?? 0)}-${String(task.status)}-${asLines(task, "actionsTaken").join("|")}-${asLines(task, "nextActions").join("|")}`}
                     task={task}
                     editable={canEdit}
                     meetingDate={meetingDate}

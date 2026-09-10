@@ -64,7 +64,7 @@ export default async function CommunicationPage() {
             />
           ) : (
             <p className="text-sm text-muted-foreground">
-              Mike, Will, or Kelvin can send the email reminder from here.
+              An admin or manager can send the email reminder from here.
             </p>
           )}
         </section>

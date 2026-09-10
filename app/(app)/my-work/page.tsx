@@ -49,7 +49,7 @@ export default async function MyWorkPage({
               Share screen
             </Button>
             {canAssignWork(user) ? (
-              <Button render={<Link href="/tasks/new" />}>Assign a piece</Button>
+              <Button render={<Link href="/tasks/new" />}>Assign a task</Button>
             ) : null}
           </>
         }

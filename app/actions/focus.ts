@@ -25,9 +25,7 @@ export async function saveMonthFocusAction(input: { month?: string; summary: str
     entityId: month,
     details: { month },
   });
-  revalidatePath("/leadership");
-  revalidatePath("/my-work");
-  revalidatePath("/team");
+  revalidatePath("/", "layout");
   return { ok: true };
 }
 
@@ -37,7 +35,7 @@ export async function sendCallRemindersAction(input?: { force?: boolean }) {
     return { error: "Not permitted." };
   }
   const result = await sendCallReminders({ force: Boolean(input?.force), actorId: user.id });
-  revalidatePath("/leadership");
+  revalidatePath("/", "layout");
   revalidatePath("/notifications");
   revalidatePath("/communication");
   return result;
@@ -53,7 +51,7 @@ export async function sendUpdateStatusRemindersAction(input?: { note?: string })
     actorName: user.name,
     note: input?.note,
   });
-  revalidatePath("/leadership");
+  revalidatePath("/", "layout");
   revalidatePath("/notifications");
   revalidatePath("/communication");
   return result;

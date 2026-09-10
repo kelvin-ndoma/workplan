@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { getProjectDetail, getUsers } from "@/lib/queries";
-import { canCreateProjects } from "@/lib/permissions";
+import { canAssignWork, canCreateProjects } from "@/lib/permissions";
 import { formatDateTime, formatShortDate } from "@/lib/dates";
-import { PageHeader, ProgressBar, StatCard, StatusBadge, UserAvatar } from "@/components/work-ui";
+import { PageHeader, StatCard, StatusBadge, UserAvatar } from "@/components/work-ui";
 import { CommentThread } from "@/components/comments";
 import { DeliverableForm } from "@/components/forms";
+import { DeleteProjectButton, DeliverableManager } from "@/components/projects/manage";
+import { Button } from "@/components/ui/button";
 import { connectDB } from "@/lib/db";
 import { Comment } from "@/models/Comment";
 import { serialize } from "@/lib/serialize";
@@ -32,7 +34,22 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         eyebrow="Project"
         title={String(project.name)}
         description={String(project.description || "")}
-        actions={<StatusBadge value={String(project.status)} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge value={String(project.status)} />
+            {canAssignWork(user) ? (
+              <Button render={<Link href={`/tasks/new?project=${id}`} />}>Assign a task</Button>
+            ) : null}
+            {canCreateProjects(user) ? (
+              <>
+                <Button variant="outline" render={<Link href={`/projects/${id}/edit`} />}>
+                  Edit
+                </Button>
+                <DeleteProjectButton id={id} name={String(project.name)} />
+              </>
+            ) : null}
+          </div>
+        }
       />
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Progress" value={`${Number(project.progress)}%`} />
@@ -44,17 +61,12 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
         <div className="space-y-6">
           <section className="rounded-2xl border bg-card p-5">
             <h2 className="mb-4 text-sm font-semibold tracking-wide uppercase">Deliverables</h2>
-            <div className="space-y-3">
-              {(data.deliverables as Array<Record<string, unknown>>).map((item) => (
-                <div key={String(item.id)}>
-                  <div className="mb-1 flex justify-between text-sm">
-                    <span className="font-medium">{String(item.name)}</span>
-                    <span>{Number(item.progress)}%</span>
-                  </div>
-                  <ProgressBar value={Number(item.progress)} />
-                </div>
-              ))}
-            </div>
+            <DeliverableManager
+              projectId={id}
+              users={users}
+              deliverables={data.deliverables as Array<Record<string, unknown>>}
+              canManage={canCreateProjects(user)}
+            />
           </section>
           <section className="rounded-2xl border bg-card p-5">
             <h2 className="mb-4 text-sm font-semibold tracking-wide uppercase">Tasks</h2>

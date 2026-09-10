@@ -21,7 +21,7 @@ export function canCreateProjects(user: Pick<SessionUser, "role">) {
 }
 
 export function canAssignWork(user: Pick<SessionUser, "role">) {
-  return isLeadership(user);
+  return user.role === "ADMIN";
 }
 
 export function canViewAllWork(user: Pick<SessionUser, "role">) {
@@ -32,8 +32,7 @@ export function canUpdateTask(
   user: SessionUser,
   task: { assignedTo?: string | null; createdBy?: string | null },
 ) {
-  if (isLeadership(user)) return true;
-  return task.assignedTo === user.id || task.createdBy === user.id;
+  return task.assignedTo === user.id;
 }
 
 export function canShareScreen(_user: Pick<SessionUser, "role" | "id">) {
@@ -41,7 +40,7 @@ export function canShareScreen(_user: Pick<SessionUser, "role" | "id">) {
 }
 
 export function homePathForRole(role: Role) {
-  if (role === "ADMIN") return "/leadership";
+  if (role === "ADMIN") return "/projects";
   if (role === "MANAGER") return "/team";
   return "/my-work";
 }

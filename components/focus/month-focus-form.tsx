@@ -2,13 +2,23 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { formatDistanceToNow } from "date-fns";
 import { toast } from "sonner";
 import { saveMonthFocusAction } from "@/app/actions/focus";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-export function MonthFocusForm({ month, summary }: { month: string; summary: string }) {
+export function MonthFocusForm({
+  month,
+  summary,
+  setByName,
+  updatedAt,
+}: {
+  month: string;
+  summary: string;
+  setByName?: string;
+  updatedAt?: string;
+}) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -25,17 +35,24 @@ export function MonthFocusForm({ month, summary }: { month: string; summary: str
         });
       }}
     >
-      <Label htmlFor="summary">This month’s focus</Label>
       <Textarea
         id="summary"
         name="summary"
         rows={4}
         defaultValue={summary}
-        placeholder="What the team should hit this month. Mike sets this; everyone else executes."
+        placeholder="What the team should hit this month. Shown on everyone’s My status."
       />
-      <Button type="submit" disabled={pending} className="w-fit">
-        {pending ? "Saving…" : "Save focus"}
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={pending} className="w-fit">
+          {pending ? "Saving…" : "Save focus"}
+        </Button>
+        {setByName ? (
+          <p className="text-xs text-muted-foreground">
+            Last set by {setByName}
+            {updatedAt ? ` · ${formatDistanceToNow(new Date(updatedAt), { addSuffix: true })}` : ""}
+          </p>
+        ) : null}
+      </div>
     </form>
   );
 }

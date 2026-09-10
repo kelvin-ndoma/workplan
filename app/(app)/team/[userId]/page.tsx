@@ -8,7 +8,7 @@ import { getMyWorkData } from "@/lib/queries";
 import { EmptyState, PageHeader, ProgressBar, StatCard } from "@/components/work-ui";
 import { MeetingLinkBar } from "@/components/layout/topbar";
 import { StatusTable } from "@/components/status/status-table";
-import { isLeadership } from "@/lib/permissions";
+import { canAssignWork } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import {
   formatMeetingDateLong,
@@ -40,7 +40,14 @@ export default async function MemberPlanPage({
       <PageHeader
         title={person.name.split(" ")[0]}
         description={`${person.jobTitle ?? ""} · ${formatMeetingDateLong(meeting)}`}
-        actions={<Button render={<Link href={`/brief?meeting=${meeting}`} />}>Share screen</Button>}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            {canAssignWork(viewer) ? (
+              <Button render={<Link href={`/tasks/new?to=${userId}`} />}>Assign a task</Button>
+            ) : null}
+            <Button render={<Link href={`/brief?meeting=${meeting}`} />}>Share screen</Button>
+          </div>
+        }
       />
       <div className="mb-6">
         <MeetingLinkBar meeting={meeting} pathname={`/team/${userId}`} />
@@ -55,11 +62,11 @@ export default async function MemberPlanPage({
         <ProgressBar value={(data.summary as { progress: number }).progress} className="h-2" />
       </div>
       {(data.tasks as Array<Record<string, unknown>>).length === 0 ? (
-        <EmptyState title="No pieces assigned yet." />
+        <EmptyState title="No tasks assigned yet." />
       ) : (
         <StatusTable
           tasks={data.tasks as never}
-          editable={(own || isLeadership(viewer)) && isEditableMeetingDate(meeting)}
+          editable={own && isEditableMeetingDate(meeting)}
           meetingDate={meeting}
         />
       )}

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Maximize } from "lucide-react";
+import { ChevronLeft, ChevronRight, Maximize, Minus, Plus } from "lucide-react";
 import { ProgressBar, StatusBadge, UserAvatar } from "@/components/work-ui";
 import { StatusTable, type StatusTask } from "@/components/status/status-table";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,10 @@ type Member = {
   summary: { progress: number; completed: number; inProgress: number; blocked: number; atRisk: number };
   tasks: StatusTask[];
 };
+
+const ZOOM_MIN = 100;
+const ZOOM_MAX = 200;
+const ZOOM_STEP = 25;
 
 export function BriefDriver({
   members,
@@ -29,10 +33,19 @@ export function BriefDriver({
 }) {
   const people = members;
   const [index, setIndex] = useState(0);
+  const [zoom, setZoom] = useState(125);
   const current = people[index];
+
+  function setZoomClamped(next: number) {
+    setZoom(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, next)));
+  }
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT")) {
+        return;
+      }
       if (event.key === "ArrowRight" || event.key === "ArrowDown") {
         event.preventDefault();
         setIndex((value) => Math.min(people.length - 1, value + 1));
@@ -40,6 +53,18 @@ export function BriefDriver({
       if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
         event.preventDefault();
         setIndex((value) => Math.max(0, value - 1));
+      }
+      if (event.key === "+" || event.key === "=") {
+        event.preventDefault();
+        setZoom((value) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value + ZOOM_STEP)));
+      }
+      if (event.key === "-" || event.key === "_") {
+        event.preventDefault();
+        setZoom((value) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value - ZOOM_STEP)));
+      }
+      if (event.key === "0") {
+        event.preventDefault();
+        setZoom(100);
       }
       if (event.key.toLowerCase() === "f") {
         void document.documentElement.requestFullscreen?.();
@@ -115,6 +140,34 @@ export function BriefDriver({
               <StatusBadge value="AT_RISK" />
             ) : null}
             <p className="text-2xl font-semibold tabular-nums sm:text-3xl">{current.summary.progress}%</p>
+            <div className="flex items-center rounded-lg border bg-card">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Zoom out (−)"
+                disabled={zoom <= ZOOM_MIN}
+                onClick={() => setZoomClamped(zoom - ZOOM_STEP)}
+              >
+                <Minus />
+              </Button>
+              <button
+                type="button"
+                className="min-w-12 px-1 text-center text-xs font-semibold tabular-nums"
+                title="Reset zoom (0)"
+                onClick={() => setZoom(100)}
+              >
+                {zoom}%
+              </button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Zoom in (+)"
+                disabled={zoom >= ZOOM_MAX}
+                onClick={() => setZoomClamped(zoom + ZOOM_STEP)}
+              >
+                <Plus />
+              </Button>
+            </div>
             <Button
               variant="outline"
               size="icon-sm"
@@ -125,7 +178,11 @@ export function BriefDriver({
             </Button>
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 sm:py-5">
+        <div className="flex-1 overflow-auto px-3 py-4 sm:px-6 sm:py-5">
+          <div
+            className="origin-top-left"
+            style={{ zoom: zoom / 100, width: zoom === 100 ? "100%" : `${(10000 / zoom).toFixed(2)}%` }}
+          >
           <div className="mb-5 grid max-w-3xl grid-cols-2 gap-3 text-center text-sm sm:grid-cols-4">
             <Stat label="Done" value={current.summary.completed} />
             <Stat label="Active" value={current.summary.inProgress} />
@@ -134,13 +191,14 @@ export function BriefDriver({
           </div>
           <ProgressBar value={current.summary.progress} className="mb-6 h-2" />
           <StatusTable tasks={current.tasks} meetingDate={meetingDate} />
+          </div>
         </div>
         <footer className="flex flex-wrap items-center justify-between gap-2 border-t bg-white px-3 py-3 sm:px-6">
           <Button variant="outline" disabled={index === 0} onClick={() => setIndex((value) => value - 1)}>
             <ChevronLeft /> <span className="hidden sm:inline">Previous</span>
           </Button>
           <p className="order-last w-full text-center text-xs text-muted-foreground sm:order-none sm:w-auto sm:text-sm">
-            {index + 1} of {people.length} · share this tab
+            {index + 1} of {people.length} · share this tab · + / − zoom
           </p>
           <Button disabled={index === people.length - 1} onClick={() => setIndex((value) => value + 1)}>
             <span className="hidden sm:inline">Next</span> <ChevronRight />

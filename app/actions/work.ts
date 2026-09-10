@@ -26,11 +26,13 @@ import {
   Deliverable,
   Department,
   Meeting,
+  MeetingStatus,
   Notification,
   Project,
   SupportRequest,
   Task,
   User,
+  Activity,
 } from "@/models";
 import { randomBytes } from "crypto";
 import { currentWorkPlanMonth } from "@/lib/dates";
@@ -43,14 +45,7 @@ import { hashPassword, passwordPolicyError } from "@/lib/password";
 import type { TaskStatus } from "@/types";
 
 function revalidateWork() {
-  revalidatePath("/my-work");
-  revalidatePath("/team");
-  revalidatePath("/leadership");
-  revalidatePath("/projects");
-  revalidatePath("/calendar");
-  revalidatePath("/meetings");
-  revalidatePath("/reports");
-  revalidatePath("/brief");
+  revalidatePath("/", "layout");
 }
 
 export async function createUserAction(input: unknown) {
@@ -226,6 +221,67 @@ export async function createProjectAction(input: unknown) {
   return { id: String(project._id) };
 }
 
+async function deleteTasksFor(filter: Record<string, unknown>) {
+  const tasks = await Task.find(filter).select("_id").lean();
+  const ids = tasks.map((task) => task._id);
+  if (ids.length === 0) return;
+  await MeetingStatus.deleteMany({ taskId: { $in: ids } });
+  await Activity.deleteMany({ taskId: { $in: ids } });
+  await SupportRequest.deleteMany({ taskId: { $in: ids } });
+  await Comment.deleteMany({ targetType: "TASK", targetId: { $in: ids } });
+  await Task.deleteMany({ _id: { $in: ids } });
+}
+
+export async function updateProjectAction(id: string, input: unknown) {
+  const user = await requireUser();
+  if (!canCreateProjects(user)) return { error: "Not permitted." };
+  const data = projectSchema.parse(input);
+  await connectDB();
+  const project = await Project.findByIdAndUpdate(
+    id,
+    {
+      ...data,
+      startDate: data.startDate ? new Date(data.startDate) : undefined,
+      targetDate: data.targetDate ? new Date(data.targetDate) : undefined,
+    },
+    { new: true },
+  );
+  if (!project) return { error: "Project not found." };
+  await writeAudit({
+    actorId: user.id,
+    action: "PROJECT_UPDATED",
+    entityType: "Project",
+    entityId: id,
+    details: { name: project.name },
+  });
+  revalidateWork();
+  revalidatePath(`/projects/${id}`);
+  return { id };
+}
+
+export async function deleteProjectAction(id: string) {
+  const user = await requireUser();
+  if (!canCreateProjects(user)) return { error: "Not permitted." };
+  await connectDB();
+  const project = await Project.findById(id);
+  if (!project) return { error: "Project not found." };
+  const deliverableIds = await Deliverable.find({ projectId: id }).distinct("_id");
+  await deleteTasksFor({ projectId: id });
+  await Deliverable.deleteMany({ projectId: id });
+  await Comment.deleteMany({ targetType: "PROJECT", targetId: id });
+  await Project.findByIdAndDelete(id);
+  await writeAudit({
+    actorId: user.id,
+    action: "PROJECT_DELETED",
+    entityType: "Project",
+    entityId: id,
+    details: { name: project.name, deliverables: deliverableIds.length },
+  });
+  revalidateWork();
+  revalidatePath("/projects");
+  return { ok: true as const };
+}
+
 export async function createDeliverableAction(input: unknown) {
   const user = await requireUser();
   if (!canCreateProjects(user)) return { error: "Not permitted." };
@@ -240,68 +296,269 @@ export async function createDeliverableAction(input: unknown) {
   return { id: String(deliverable._id) };
 }
 
+export async function updateDeliverableAction(id: string, input: unknown) {
+  const user = await requireUser();
+  if (!canCreateProjects(user)) return { error: "Not permitted." };
+  const data = deliverableSchema.partial().parse(input);
+  await connectDB();
+  const current = await Deliverable.findById(id);
+  if (!current) return { error: "Deliverable not found." };
+  const updates: Record<string, unknown> = { ...data };
+  if (data.dueDate !== undefined) {
+    updates.dueDate = data.dueDate ? new Date(data.dueDate) : null;
+  }
+  if (data.startDate !== undefined) {
+    updates.startDate = data.startDate ? new Date(data.startDate) : null;
+  }
+  const deliverable = await Deliverable.findByIdAndUpdate(id, updates, { new: true });
+  if (!deliverable) return { error: "Deliverable not found." };
+  await recalculateProgress({ deliverableId: id, projectId: String(deliverable.projectId) });
+  await writeAudit({
+    actorId: user.id,
+    action: "DELIVERABLE_UPDATED",
+    entityType: "Deliverable",
+    entityId: id,
+    details: { name: deliverable.name },
+  });
+  revalidateWork();
+  revalidatePath(`/projects/${String(deliverable.projectId)}`);
+  return { id };
+}
+
+export async function deleteDeliverableAction(id: string) {
+  const user = await requireUser();
+  if (!canCreateProjects(user)) return { error: "Not permitted." };
+  await connectDB();
+  const deliverable = await Deliverable.findById(id);
+  if (!deliverable) return { error: "Deliverable not found." };
+  const projectId = String(deliverable.projectId);
+  await deleteTasksFor({ deliverableId: id });
+  await Deliverable.findByIdAndDelete(id);
+  await recalculateProgress({ projectId });
+  await writeAudit({
+    actorId: user.id,
+    action: "DELIVERABLE_DELETED",
+    entityType: "Deliverable",
+    entityId: id,
+    details: { name: deliverable.name, projectId },
+  });
+  revalidateWork();
+  revalidatePath(`/projects/${projectId}`);
+  return { ok: true as const };
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function findOrCreateProjectForAssign(input: {
+  userId: string;
+  projectId?: string;
+  newProjectName?: string;
+  memberIds: string[];
+}) {
+  const name = String(input.newProjectName ?? "").trim();
+  if (name) {
+    const existing = await Project.findOne({
+      name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
+      status: { $ne: "ARCHIVED" },
+    });
+    if (existing) {
+      const members = new Set([
+        ...((existing.memberIds ?? []).map((id) => String(id))),
+        ...input.memberIds,
+        input.userId,
+      ]);
+      existing.memberIds = [...members];
+      await existing.save();
+      return existing;
+    }
+    return Project.create({
+      name,
+      ownerId: input.userId,
+      memberIds: [...new Set([...input.memberIds, input.userId])],
+      status: "ACTIVE",
+      priority: "MEDIUM",
+    });
+  }
+  const projectId = String(input.projectId ?? "").trim();
+  if (!projectId) return null;
+  return Project.findById(projectId);
+}
+
+async function findOrCreateDeliverableForAssign(input: {
+  userId: string;
+  projectId: string;
+  deliverableId?: string;
+  newDeliverableName?: string;
+  fallbackName: string;
+}) {
+  const name = String(input.newDeliverableName ?? "").trim() || String(input.fallbackName ?? "").trim();
+  const deliverableId = String(input.deliverableId ?? "").trim();
+  if (name && !deliverableId) {
+    const existing = await Deliverable.findOne({
+      projectId: input.projectId,
+      name: { $regex: `^${escapeRegex(name)}$`, $options: "i" },
+    });
+    if (existing) return existing;
+    return Deliverable.create({
+      projectId: input.projectId,
+      name,
+      ownerId: input.userId,
+      status: "ACTIVE",
+      priority: "MEDIUM",
+    });
+  }
+  if (!deliverableId) return null;
+  return Deliverable.findById(deliverableId);
+}
+
 export async function createTaskAction(input: unknown) {
   const user = await requireUser();
-  if (!canAssignWork(user) && !input) return { error: "Not permitted." };
-  const parsed = taskSchema.parse({
-    ...(input as object),
-    workPlanMonth:
-      (input as { workPlanMonth?: string }).workPlanMonth || currentWorkPlanMonth(),
-  });
-  if (!canAssignWork(user) && parsed.assignedTo && parsed.assignedTo !== user.id) {
-    return { error: "Not permitted to assign this task." };
-  }
+  const raw = input as {
+    assignedTo?: string;
+    assignedToIds?: string[];
+    workPlanMonth?: string;
+    projectId?: string;
+    deliverableId?: string;
+    newProjectName?: string;
+    newDeliverableName?: string;
+  } & Record<string, unknown>;
+  const assigneeIds = [
+    ...new Set(
+      (Array.isArray(raw.assignedToIds) ? raw.assignedToIds : [raw.assignedTo])
+        .map((id) => String(id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  if (!canAssignWork(user)) return { error: "Only admins can assign tasks." };
+  if (assigneeIds.length === 0) return { error: "Pick at least one person." };
+  if (!String(raw.title ?? "").trim()) return { error: "Add a Task’s Goal." };
+
   await connectDB();
-  const task = await Task.create({
-    ...parsed,
-    createdBy: user.id,
-    startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
-    dueDate: parsed.dueDate ? new Date(parsed.dueDate) : undefined,
-    completedAt: parsed.status === "COMPLETED" ? new Date() : undefined,
+  const project = await findOrCreateProjectForAssign({
+    userId: user.id,
+    projectId: raw.projectId,
+    newProjectName: raw.newProjectName,
+    memberIds: assigneeIds,
   });
+  if (!project) return { error: "Pick a project, or add a new one." };
+  const projectId = String(project._id);
+
+  const deliverable = await findOrCreateDeliverableForAssign({
+    userId: user.id,
+    projectId,
+    deliverableId: raw.deliverableId,
+    newDeliverableName: raw.newDeliverableName,
+    fallbackName: String(raw.title),
+  });
+  if (!deliverable) return { error: "Pick a deliverable, or add a new one." };
+  const deliverableId = String(deliverable._id);
+
+  const createdIds: string[] = [];
+  for (const assignedTo of assigneeIds) {
+    const parsed = taskSchema.parse({
+      ...raw,
+      projectId,
+      deliverableId,
+      assignedTo,
+      workPlanMonth: raw.workPlanMonth || currentWorkPlanMonth(),
+      status: raw.status || "NOT_STARTED",
+      priority: raw.priority || "MEDIUM",
+      progress: Number(raw.progress || 0),
+      weight: Number(raw.weight || 1),
+    });
+    const task = await Task.create({
+      ...parsed,
+      createdBy: user.id,
+      startDate: parsed.startDate ? new Date(parsed.startDate) : undefined,
+      dueDate: parsed.dueDate ? new Date(parsed.dueDate) : undefined,
+      completedAt: parsed.status === "COMPLETED" ? new Date() : undefined,
+    });
+    createdIds.push(String(task._id));
+    await recordActivity({
+      taskId: String(task._id),
+      userId: user.id,
+      type: "ASSIGNMENT_CHANGED",
+      message: `Task created: ${task.title}`,
+    });
+    await writeAudit({
+      actorId: user.id,
+      action: "TASK_CREATED",
+      entityType: "Task",
+      entityId: String(task._id),
+      details: { title: task.title, assignedTo: parsed.assignedTo },
+    });
+    if (parsed.assignedTo && parsed.assignedTo !== user.id) {
+      await notify({
+        userId: parsed.assignedTo,
+        type: "TASK_ASSIGNED",
+        title: "Task assigned",
+        message: `${user.name} assigned you “${task.title}”.`,
+        link: `/tasks/${String(task._id)}`,
+      });
+      await sendAssignmentEmail({
+        assigneeId: parsed.assignedTo,
+        assignerName: user.name,
+        title: task.title,
+        month: parsed.workPlanMonth,
+        taskId: String(task._id),
+      });
+    }
+    await recalculateProgress({
+      deliverableId: parsed.deliverableId,
+      projectId: parsed.projectId,
+    });
+  }
+  revalidateWork();
+  revalidatePath(`/projects/${projectId}`);
+  return { id: createdIds[0], ids: createdIds, count: createdIds.length };
+}
+
+export async function reassignTaskAction(input: { taskId: string; assignedTo: string }) {
+  const user = await requireUser();
+  if (!canAssignWork(user)) return { error: "Not permitted." };
+  const assignedTo = String(input.assignedTo || "").trim();
+  if (!assignedTo) return { error: "Pick a person." };
+  await connectDB();
+  const task = await Task.findById(input.taskId);
+  if (!task) return { error: "Task not found." };
+  const previous = String(task.assignedTo ?? "");
+  if (previous === assignedTo) return { ok: true as const, id: String(task._id) };
+  task.assignedTo = assignedTo;
+  await task.save();
   await recordActivity({
     taskId: String(task._id),
     userId: user.id,
     type: "ASSIGNMENT_CHANGED",
-    message: `Task created: ${task.title}`,
+    message: `${user.name} transferred “${task.title}”.`,
   });
   await writeAudit({
     actorId: user.id,
-    action: "TASK_CREATED",
+    action: "TASK_REASSIGNED",
     entityType: "Task",
     entityId: String(task._id),
-    details: { title: task.title, assignedTo: parsed.assignedTo },
+    details: { from: previous, to: assignedTo, title: task.title },
   });
-  if (parsed.assignedTo && parsed.assignedTo !== user.id) {
+  if (assignedTo !== user.id) {
     await notify({
-      userId: parsed.assignedTo,
+      userId: assignedTo,
       type: "TASK_ASSIGNED",
-      title: "Work assigned",
-      message: `${user.name} assigned you “${task.title}”.`,
+      title: "Task transferred to you",
+      message: `${user.name} transferred “${task.title}” to you.`,
       link: `/tasks/${String(task._id)}`,
     });
     await sendAssignmentEmail({
-      assigneeId: parsed.assignedTo,
+      assigneeId: assignedTo,
       assignerName: user.name,
-      title: task.title,
-      month: parsed.workPlanMonth,
+      title: String(task.title),
+      month: String(task.workPlanMonth),
       taskId: String(task._id),
     });
   }
-  if (parsed.supportNeeded && parsed.supportDescription) {
-    await SupportRequest.create({
-      taskId: task._id,
-      requestedBy: user.id,
-      description: parsed.supportDescription,
-      status: "OPEN",
-    });
-  }
-  await recalculateProgress({
-    deliverableId: parsed.deliverableId,
-    projectId: parsed.projectId,
-  });
   revalidateWork();
-  return { id: String(task._id) };
+  revalidatePath(`/tasks/${String(task._id)}`);
+  return { ok: true as const, id: String(task._id) };
 }
 
 export async function quickUpdateAction(input: unknown) {

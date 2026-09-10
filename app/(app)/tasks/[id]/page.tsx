@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
-import { getTaskById } from "@/lib/queries";
-import { canUpdateTask } from "@/lib/permissions";
+import { canAssignWork, canUpdateTask } from "@/lib/permissions";
+import { getTaskById, getUsers } from "@/lib/queries";
+import { ReassignTaskForm } from "@/components/forms";
 import { formatShortDate } from "@/lib/dates";
 import { PageHeader, ProgressBar, StatusBadge } from "@/components/work-ui";
 import { QuickUpdateForm } from "@/components/tasks/quick-update";
@@ -12,7 +13,7 @@ import type { TaskStatus } from "@/types";
 export default async function TaskPage({ params }: { params: Promise<{ id: string }> }) {
   const user = await requireUser();
   const { id } = await params;
-  const data = await getTaskById(id);
+  const [data, users] = await Promise.all([getTaskById(id), getUsers()]);
   if (!data) notFound();
   const task = (data as { task: Record<string, unknown> }).task;
   const assignedTo = (task.assignedTo as { id?: string } | undefined)?.id;
@@ -85,14 +86,31 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           />
         </div>
       </div>
-      {canEdit ? (
-        <div className="rounded-2xl border bg-card p-5">
-          <h2 className="mb-3 text-sm font-semibold tracking-wide uppercase">Quick update</h2>
-          <QuickUpdateForm
-            taskId={id}
-            progress={Number(task.progress)}
-            status={String(task.status) as TaskStatus}
-          />
+      {canEdit || canAssignWork(user) ? (
+        <div className="space-y-4">
+          {canEdit ? (
+            <div className="rounded-2xl border bg-card p-5">
+              <h2 className="mb-3 text-sm font-semibold tracking-wide uppercase">Quick update</h2>
+              <QuickUpdateForm
+                taskId={id}
+                progress={Number(task.progress)}
+                status={String(task.status) as TaskStatus}
+              />
+            </div>
+          ) : null}
+          {canAssignWork(user) ? (
+            <div className="rounded-2xl border bg-card p-5">
+              <h2 className="mb-3 text-sm font-semibold tracking-wide uppercase">Transfer task</h2>
+              <p className="mb-3 text-sm text-muted-foreground">
+                Move this task to someone else. It does not remove anyone else’s work.
+              </p>
+              <ReassignTaskForm
+                taskId={id}
+                users={users as Array<{ id: string; name: string }>}
+                currentAssigneeId={assignedTo}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

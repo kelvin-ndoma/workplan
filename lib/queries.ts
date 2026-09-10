@@ -128,7 +128,9 @@ export async function getMonthTasks(options: {
   projectId?: string;
 }) {
   await connectDB();
-  const filter: Record<string, unknown> = { workPlanMonth: options.month };
+  const filter: Record<string, unknown> = {
+    $or: [{ workPlanMonth: options.month }, { status: { $nin: ["COMPLETED", "CANCELLED"] } }],
+  };
   if (options.userId) filter.assignedTo = options.userId;
   if (options.projectId) filter.projectId = options.projectId;
   return serialize(await Task.find(filter).populate(taskPopulate).sort({ dueDate: 1 }).lean());

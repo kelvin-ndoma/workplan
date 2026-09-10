@@ -4,6 +4,7 @@ import { getTeamDashboard } from "@/lib/queries";
 import { PageHeader, ProgressBar, StatCard, UserAvatar } from "@/components/work-ui";
 import { MeetingLinkBar } from "@/components/layout/topbar";
 import { Button } from "@/components/ui/button";
+import { canAssignWork } from "@/lib/permissions";
 import {
   formatMeetingDateLong,
   MEETING_TIME_LABEL,
@@ -17,7 +18,7 @@ export default async function TeamPage({
 }: {
   searchParams: Promise<{ month?: string; meeting?: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { month: monthParam, meeting: meetingParam } = await searchParams;
   const meeting = resolveMeetingDateKey(meetingParam);
   const working = nextMeetingDateKey();
@@ -35,7 +36,12 @@ export default async function TeamPage({
             : `Status from the ${formatMeetingDateLong(meeting)} call.`
         }
         actions={
-          <Button render={<Link href={`/brief?meeting=${meeting}`} />}>Share this in Teams</Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {canAssignWork(user) ? (
+              <Button render={<Link href="/tasks/new" />}>Assign a task</Button>
+            ) : null}
+            <Button render={<Link href={`/brief?meeting=${meeting}`} />}>Share this in Teams</Button>
+          </div>
         }
       />
       <div className="mb-6">
