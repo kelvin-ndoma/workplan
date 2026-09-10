@@ -365,7 +365,7 @@ async function findOrCreateProjectForAssign(input: {
     });
     if (existing) {
       const members = new Set([
-        ...((existing.memberIds ?? []).map((id) => String(id))),
+        ...((existing.memberIds ?? []).map((id: unknown) => String(id))),
         ...input.memberIds,
         input.userId,
       ]);
