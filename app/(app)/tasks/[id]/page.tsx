@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/session";
 import { canAssignWork, canDeleteTask, canUpdateTask } from "@/lib/permissions";
 import { DeleteTaskButton } from "@/components/projects/manage";
 import { getTaskById, getUsers } from "@/lib/queries";
-import { ReassignTaskForm } from "@/components/forms";
+import { ReassignTaskForm, RenameTaskTitleForm } from "@/components/forms";
 import { formatShortDate } from "@/lib/dates";
 import { PageHeader, ProgressBar, StatusBadge } from "@/components/work-ui";
 import { QuickUpdateForm } from "@/components/tasks/quick-update";
@@ -104,6 +104,12 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
                 progress={Number(task.progress)}
                 status={String(task.status) as TaskStatus}
               />
+            </div>
+          ) : null}
+          {canAssignWork(user) ? (
+            <div className="rounded-2xl border bg-card p-5">
+              <h2 className="mb-3 text-sm font-semibold tracking-wide uppercase">Edit deliverable</h2>
+              <RenameTaskTitleForm taskId={id} title={String(task.title)} />
             </div>
           ) : null}
           {canAssignWork(user) ? (

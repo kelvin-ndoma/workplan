@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { createDeliverableAction, createProjectAction, reassignTaskAction, updateDeliverableAction, updateProjectAction } from "@/app/actions/work";
+import { createDeliverableAction, createProjectAction, reassignTaskAction, updateDeliverableAction, updateProjectAction, updateTaskTitleAction } from "@/app/actions/work";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -188,6 +188,41 @@ export function ReassignTaskForm({
       </div>
       <Button type="submit" variant="outline" disabled={pending}>
         {pending ? "Transferring…" : "Transfer task"}
+      </Button>
+    </form>
+  );
+}
+
+export function RenameTaskTitleForm({ taskId, title }: { taskId: string; title: string }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <form
+      className="grid gap-3"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const form = new FormData(event.currentTarget);
+        startTransition(async () => {
+          const result = await updateTaskTitleAction({
+            taskId,
+            title: String(form.get("title") || ""),
+          });
+          if (result && "error" in result && result.error) {
+            toast.error(result.error);
+            return;
+          }
+          toast.success("Deliverable title saved");
+          router.refresh();
+        });
+      }}
+    >
+      <div>
+        <Label htmlFor="title">Deliverable</Label>
+        <Input id="title" name="title" defaultValue={title} required minLength={2} className="mt-1" />
+      </div>
+      <Button type="submit" variant="outline" disabled={pending}>
+        {pending ? "Saving…" : "Save title"}
       </Button>
     </form>
   );

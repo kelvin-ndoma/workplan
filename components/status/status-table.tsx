@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { statusUpdateAction } from "@/app/actions/work";
+import { statusUpdateAction, updateTaskTitleAction } from "@/app/actions/work";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ProgressBar, StatusBadge } from "@/components/work-ui";
@@ -47,10 +48,12 @@ function asLines(task: StatusTask, key: "actionsTaken" | "nextActions") {
 export function StatusTable({
   tasks,
   editable = false,
+  canRename = false,
   meetingDate,
 }: {
   tasks: StatusTask[];
   editable?: boolean;
+  canRename?: boolean;
   meetingDate?: string;
 }) {
   const canEdit = editable && isEditableMeetingDate(meetingDate);
@@ -92,6 +95,7 @@ export function StatusTable({
                     key={`${String(task.id)}-${meetingDate ?? "live"}-${Number(task.progress ?? 0)}-${String(task.status)}-${asLines(task, "actionsTaken").join("|")}-${asLines(task, "nextActions").join("|")}`}
                     task={task}
                     editable={canEdit}
+                    canRename={canRename}
                     meetingDate={meetingDate}
                   />
                 ))}
@@ -107,14 +111,17 @@ export function StatusTable({
 function StatusRow({
   task,
   editable,
+  canRename,
   meetingDate,
 }: {
   task: StatusTask;
   editable: boolean;
+  canRename: boolean;
   meetingDate?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [pending, startTransition] = useTransition();
   const [progress, setProgress] = useState(Number(task.progress ?? 0));
   const [status, setStatus] = useState(String(task.status ?? "NOT_STARTED") as TaskStatus);
@@ -124,12 +131,56 @@ function StatusRow({
     <>
       <tr className="border-b last:border-0 align-top">
         <td className="px-4 py-3">
-          {editable ? (
-            <Link href={`/tasks/${String(task.id)}`} className="font-medium hover:underline">
-              {String(task.title)}
-            </Link>
+          {renaming && canRename ? (
+            <form
+              className="grid gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                startTransition(async () => {
+                  const result = await updateTaskTitleAction({
+                    taskId: String(task.id),
+                    title: String(form.get("title") || ""),
+                  });
+                  if (result && "error" in result && result.error) {
+                    toast.error(result.error);
+                    return;
+                  }
+                  toast.success("Deliverable title saved");
+                  setRenaming(false);
+                  router.refresh();
+                });
+              }}
+            >
+              <Input name="title" defaultValue={String(task.title ?? "")} required minLength={2} className="h-8" />
+              <div className="flex gap-2">
+                <Button type="submit" size="sm" disabled={pending}>
+                  {pending ? "Saving…" : "Save"}
+                </Button>
+                <Button type="button" size="sm" variant="outline" onClick={() => setRenaming(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
           ) : (
-            <p className="font-medium">{String(task.title)}</p>
+            <>
+              {editable ? (
+                <Link href={`/tasks/${String(task.id)}`} className="font-medium hover:underline">
+                  {String(task.title)}
+                </Link>
+              ) : (
+                <p className="font-medium">{String(task.title)}</p>
+              )}
+              {canRename ? (
+                <button
+                  type="button"
+                  className="mt-1 block text-xs font-medium text-primary hover:underline"
+                  onClick={() => setRenaming(true)}
+                >
+                  Edit title
+                </button>
+              ) : null}
+            </>
           )}
           <div className="mt-2 flex items-center gap-2">
             <ProgressBar value={Number(task.progress ?? 0)} className="h-1.5 w-24" />

@@ -370,6 +370,37 @@ export async function deleteTaskAction(id: string) {
   return { ok: true as const };
 }
 
+export async function updateTaskTitleAction(input: { taskId: string; title: string }) {
+  const user = await requireUser();
+  if (!canAssignWork(user)) return { error: "Only admins can edit deliverable titles." };
+  const title = String(input.title ?? "").trim();
+  if (title.length < 2) return { error: "Deliverable title is too short." };
+  await connectDB();
+  const task = await Task.findById(input.taskId);
+  if (!task) return { error: "Task not found." };
+  const previous = String(task.title);
+  if (previous === title) return { ok: true as const };
+  task.title = title;
+  await task.save();
+  await recordActivity({
+    taskId: String(task._id),
+    userId: user.id,
+    type: "ASSIGNMENT_CHANGED",
+    message: `${user.name} renamed deliverable to “${title}”.`,
+  });
+  await writeAudit({
+    actorId: user.id,
+    action: "TASK_RENAMED",
+    entityType: "Task",
+    entityId: String(task._id),
+    details: { from: previous, to: title },
+  });
+  revalidateWork();
+  revalidatePath(`/tasks/${String(task._id)}`);
+  if (task.projectId) revalidatePath(`/projects/${String(task.projectId)}`);
+  return { ok: true as const };
+}
+
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

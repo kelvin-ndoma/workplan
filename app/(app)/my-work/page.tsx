@@ -74,7 +74,7 @@ export default async function MyWorkPage({
         <ProgressBar value={summary.progress} className="h-2 flex-1" />
         <span className="text-sm font-semibold tabular-nums">{summary.progress}%</span>
       </div>
-      <StatusTable tasks={data.tasks as never} editable={canEdit} meetingDate={meeting} />
+      <StatusTable tasks={data.tasks as never} editable={canEdit} canRename={canAssignWork(user)} meetingDate={meeting} />
     </div>
   );
 }

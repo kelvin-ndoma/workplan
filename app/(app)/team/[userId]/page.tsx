@@ -67,6 +67,7 @@ export default async function MemberPlanPage({
         <StatusTable
           tasks={data.tasks as never}
           editable={own && isEditableMeetingDate(meeting)}
+          canRename={canAssignWork(viewer)}
           meetingDate={meeting}
         />
       )}
