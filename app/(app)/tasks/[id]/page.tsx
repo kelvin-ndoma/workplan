@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
-import { canAssignWork, canUpdateTask } from "@/lib/permissions";
+import { canAssignWork, canDeleteTask, canUpdateTask } from "@/lib/permissions";
+import { DeleteTaskButton } from "@/components/projects/manage";
 import { getTaskById, getUsers } from "@/lib/queries";
 import { ReassignTaskForm } from "@/components/forms";
 import { formatShortDate } from "@/lib/dates";
@@ -27,9 +28,16 @@ export default async function TaskPage({ params }: { params: Promise<{ id: strin
           title={String(task.title)}
           description={String(task.description || "")}
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <StatusBadge value={String(task.status)} />
               <StatusBadge value={String(task.priority)} />
+              {canDeleteTask(user) ? (
+                <DeleteTaskButton
+                  id={id}
+                  name={String(task.title)}
+                  redirectTo="/team"
+                />
+              ) : null}
             </div>
           }
         />

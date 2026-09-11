@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Maximize, Minus, Plus } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, Maximize, Minimize, Minus, Plus } from "lucide-react";
 import { ProgressBar, StatusBadge, UserAvatar } from "@/components/work-ui";
 import { StatusTable, type StatusTask } from "@/components/status/status-table";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useFullscreen } from "@/lib/fullscreen";
 
 type Member = {
   user: { id: string; name: string; jobTitle?: string; avatar?: string };
@@ -33,7 +34,9 @@ export function BriefDriver({
 }) {
   const people = members;
   const [index, setIndex] = useState(0);
-  const [zoom, setZoom] = useState(125);
+  const [zoom, setZoom] = useState(100);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { active: fullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
   const current = people[index];
 
   function setZoomClamped(next: number) {
@@ -67,19 +70,26 @@ export function BriefDriver({
         setZoom(100);
       }
       if (event.key.toLowerCase() === "f") {
-        void document.documentElement.requestFullscreen?.();
+        event.preventDefault();
+        toggleFullscreen();
+      }
+      if (event.key === "Escape" && fullscreen) {
+        toggleFullscreen();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [people.length]);
+  }, [people.length, fullscreen, toggleFullscreen]);
 
   if (!current) {
     return <p className="p-8 text-sm text-muted-foreground">No team members to walk through.</p>;
   }
 
   return (
-    <div className="flex h-dvh bg-[oklch(0.975_0.006_250)]">
+    <div
+      ref={rootRef}
+      className="flex h-dvh w-full bg-[oklch(0.975_0.006_250)] [:fullscreen]:h-full [:fullscreen]:w-full [:-webkit-full-screen]:h-full [:-webkit-full-screen]:w-full"
+    >
       <aside className="hidden h-full w-56 shrink-0 flex-col border-r bg-white lg:flex xl:w-64">
         <div className="border-b px-4 py-4">
           <p className="text-xs font-medium text-muted-foreground">Anyone can drive this</p>
@@ -171,10 +181,10 @@ export function BriefDriver({
             <Button
               variant="outline"
               size="icon-sm"
-              onClick={() => void document.documentElement.requestFullscreen?.()}
-              title="Fullscreen for Teams"
+              onClick={() => toggleFullscreen()}
+              title={fullscreen ? "Exit fullscreen" : "Fullscreen for Teams"}
             >
-              <Maximize />
+              {fullscreen ? <Minimize /> : <Maximize />}
             </Button>
           </div>
         </header>

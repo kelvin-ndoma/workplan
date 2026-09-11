@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
   Maximize,
+  Minimize,
   Pause,
   Play,
   Square,
@@ -26,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { STATUS_HEADERS } from "@/lib/status-headers";
+import { useFullscreen } from "@/lib/fullscreen";
 import type { PresentationMode, SlideType } from "@/types";
 
 type Member = {
@@ -376,6 +378,8 @@ export function PresentationDeck({
   projects: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { active: fullscreen, toggle: toggleFullscreen } = useFullscreen(rootRef);
   const [index, setIndex] = useState(data.meeting.liveState?.currentSlideIndex ?? 0);
   const [paused, setPaused] = useState(Boolean(data.meeting.liveState?.isPaused));
   const [pending, startTransition] = useTransition();
@@ -425,15 +429,16 @@ export function PresentationDeck({
         });
       }
       if (event.key.toLowerCase() === "f") {
-        void document.documentElement.requestFullscreen?.();
+        event.preventDefault();
+        toggleFullscreen();
       }
-      if (event.key === "Escape") {
-        void document.exitFullscreen?.();
+      if (event.key === "Escape" && fullscreen) {
+        toggleFullscreen();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [data.meeting.id, data.slides.length, index, mode, sync]);
+  }, [data.meeting.id, data.slides.length, index, mode, sync, fullscreen, toggleFullscreen]);
 
   const people = useMemo(
     () => data.members.map((item) => ({ id: item.user.id, name: item.user.name })),
@@ -473,7 +478,10 @@ export function PresentationDeck({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#08111f] text-white">
+    <div
+      ref={rootRef}
+      className="flex h-dvh w-full overflow-hidden bg-[#08111f] text-white [:fullscreen]:h-full [:fullscreen]:w-full [:-webkit-full-screen]:h-full [:-webkit-full-screen]:w-full"
+    >
       <div className={`${mode === "presenter" ? "w-[68%]" : "flex-1"} relative`}>
         {data.meeting.status === "LIVE" ? (
           <div className="absolute top-6 left-8 z-10 flex items-center gap-2 rounded-full bg-red-500/20 px-3 py-1 text-sm font-semibold text-red-200 ring-1 ring-red-400/40">
@@ -542,9 +550,10 @@ export function PresentationDeck({
                 variant="ghost"
                 size="icon-sm"
                 className="text-white"
-                onClick={() => void document.documentElement.requestFullscreen?.()}
+                onClick={() => toggleFullscreen()}
+                title={fullscreen ? "Exit fullscreen" : "Fullscreen"}
               >
-                <Maximize />
+                {fullscreen ? <Minimize /> : <Maximize />}
               </Button>
               {data.meeting.status !== "LIVE" ? (
                 <Button

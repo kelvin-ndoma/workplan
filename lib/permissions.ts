@@ -24,6 +24,10 @@ export function canAssignWork(user: Pick<SessionUser, "role">) {
   return user.role === "ADMIN";
 }
 
+export function canDeleteTask(user: Pick<SessionUser, "role">) {
+  return user.role === "ADMIN";
+}
+
 export function canViewAllWork(user: Pick<SessionUser, "role">) {
   return isLeadership(user);
 }

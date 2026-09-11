@@ -2,12 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { getProjectDetail, getUsers } from "@/lib/queries";
-import { canAssignWork, canCreateProjects } from "@/lib/permissions";
+import { canAssignWork, canCreateProjects, canDeleteTask } from "@/lib/permissions";
 import { formatDateTime, formatShortDate } from "@/lib/dates";
 import { PageHeader, StatCard, StatusBadge, UserAvatar } from "@/components/work-ui";
 import { CommentThread } from "@/components/comments";
 import { DeliverableForm } from "@/components/forms";
-import { DeleteProjectButton, DeliverableManager } from "@/components/projects/manage";
+import { DeleteProjectButton, DeleteTaskButton, DeliverableManager } from "@/components/projects/manage";
 import { Button } from "@/components/ui/button";
 import { connectDB } from "@/lib/db";
 import { Comment } from "@/models/Comment";
@@ -72,15 +72,18 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
             <h2 className="mb-4 text-sm font-semibold tracking-wide uppercase">Tasks</h2>
             <div className="space-y-2">
               {(data.tasks as Array<Record<string, unknown>>).map((task) => (
-                <Link key={String(task.id)} href={`/tasks/${task.id}`} className="flex items-center justify-between rounded-xl border p-3">
-                  <div>
+                <div key={String(task.id)} className="flex items-center gap-2 rounded-xl border p-3">
+                  <Link href={`/tasks/${task.id}`} className="min-w-0 flex-1">
                     <p className="font-medium">{String(task.title)}</p>
                     <p className="text-xs text-muted-foreground">
                       {(task.assignedTo as { name?: string })?.name} · {formatShortDate(task.dueDate as string)}
                     </p>
-                  </div>
+                  </Link>
                   <StatusBadge value={String(task.status)} />
-                </Link>
+                  {canDeleteTask(user) ? (
+                    <DeleteTaskButton id={String(task.id)} name={String(task.title)} />
+                  ) : null}
+                </div>
               ))}
             </div>
           </section>

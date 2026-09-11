@@ -176,7 +176,7 @@ export async function buildDocx(data: Awaited<ReturnType<typeof getReportData>>)
           new TableRow({
             tableHeader: true,
             children: [
-              cell(STATUS_HEADERS.goal + " / Deliverable", 2200, true),
+              cell(STATUS_HEADERS.goal, 2200, true),
               cell(STATUS_HEADERS.taken, 2300, true),
               cell(STATUS_HEADERS.planned, 2300, true),
               cell(STATUS_HEADERS.support, 1880, true),

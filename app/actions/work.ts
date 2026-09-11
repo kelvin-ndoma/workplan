@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { connectDB } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/session";
-import { canAssignWork, canCreateProjects, canUpdateTask, isLeadership } from "@/lib/permissions";
+import { canAssignWork, canCreateProjects, canDeleteTask, canUpdateTask, isLeadership } from "@/lib/permissions";
 import { notify, recordActivity, writeAudit } from "@/lib/services/events";
 import { recalculateProgress } from "@/lib/services/progress";
 import { parseMentions, splitLines } from "@/lib/utils-work";
@@ -347,6 +347,29 @@ export async function deleteDeliverableAction(id: string) {
   return { ok: true as const };
 }
 
+export async function deleteTaskAction(id: string) {
+  const user = await requireUser();
+  if (!canDeleteTask(user)) return { error: "Only admins can delete tasks." };
+  await connectDB();
+  const task = await Task.findById(id);
+  if (!task) return { error: "Task not found." };
+  const projectId = String(task.projectId ?? "");
+  const deliverableId = String(task.deliverableId ?? "");
+  const title = String(task.title);
+  await deleteTasksFor({ _id: id });
+  await recalculateProgress({ deliverableId, projectId });
+  await writeAudit({
+    actorId: user.id,
+    action: "TASK_DELETED",
+    entityType: "Task",
+    entityId: id,
+    details: { title, projectId },
+  });
+  revalidateWork();
+  if (projectId) revalidatePath(`/projects/${projectId}`);
+  return { ok: true as const };
+}
+
 function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -433,7 +456,7 @@ export async function createTaskAction(input: unknown) {
   ];
   if (!canAssignWork(user)) return { error: "Only admins can assign tasks." };
   if (assigneeIds.length === 0) return { error: "Pick at least one person." };
-  if (!String(raw.title ?? "").trim()) return { error: "Add a Task’s Goal." };
+  if (!String(raw.title ?? "").trim()) return { error: "Add a deliverable." };
 
   await connectDB();
   const project = await findOrCreateProjectForAssign({

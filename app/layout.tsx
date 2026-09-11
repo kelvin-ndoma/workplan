@@ -27,7 +27,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${fontSans.variable} ${fontMono.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full bg-background font-sans text-foreground">
+      <body className="h-full min-h-full bg-background font-sans text-foreground">
         <Providers>{children}</Providers>
       </body>
     </html>

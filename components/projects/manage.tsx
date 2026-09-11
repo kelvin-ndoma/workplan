@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { deleteDeliverableAction, deleteProjectAction } from "@/app/actions/work";
+import { deleteDeliverableAction, deleteProjectAction, deleteTaskAction } from "@/app/actions/work";
 import { Button } from "@/components/ui/button";
 import { DeliverableForm } from "@/components/forms";
 import { ProgressBar } from "@/components/work-ui";
@@ -44,6 +44,43 @@ export function DeleteProjectButton({ id, name }: { id: string; name: string }) 
           }
           toast.success("Project deleted");
           router.push("/projects");
+          router.refresh();
+        });
+      }}
+    >
+      {pending ? "Deleting…" : "Delete"}
+    </Button>
+  );
+}
+
+export function DeleteTaskButton({
+  id,
+  name,
+  redirectTo,
+}: {
+  id: string;
+  name: string;
+  redirectTo?: string;
+}) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <Button
+      variant="outline"
+      disabled={pending}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!window.confirm(`Delete “${name}”? This cannot be undone.`)) return;
+        startTransition(async () => {
+          const result = await deleteTaskAction(id);
+          if (result && "error" in result && result.error) {
+            toast.error(result.error);
+            return;
+          }
+          toast.success("Task deleted");
+          if (redirectTo) router.push(redirectTo);
           router.refresh();
         });
       }}

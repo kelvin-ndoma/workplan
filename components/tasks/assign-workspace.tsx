@@ -126,7 +126,7 @@ export function AssignWorkspace({
             ) : null}
 
             <div>
-              <Label htmlFor="title">Task’s Goal</Label>
+              <Label htmlFor="title">Deliverable</Label>
               <Input id="title" name="title" placeholder="What needs to get done" required className="mt-1" />
               <Textarea name="description" placeholder="Optional detail" className="mt-2" rows={2} />
             </div>
@@ -139,7 +139,7 @@ export function AssignWorkspace({
                   placeholder={addingProject ? "First deliverable (optional)" : "New deliverable (optional)"}
                   className="mt-1"
                 />
-                <p className="mt-1 text-xs text-muted-foreground">Blank uses the task’s goal.</p>
+                <p className="mt-1 text-xs text-muted-foreground">Blank uses the deliverable name above.</p>
               </div>
             ) : null}
 

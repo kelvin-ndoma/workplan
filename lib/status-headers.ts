@@ -1,5 +1,5 @@
 export const STATUS_HEADERS = {
-  goal: "Task’s Goal",
+  goal: "Deliverable",
   taken: "Actions taken since last meeting",
   planned: "Actions planned before next meeting",
   support: "Support needed from team",
