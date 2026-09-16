@@ -11,15 +11,16 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getSessionUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (user.role !== "ADMIN") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
+  const view = new URL(request.url).searchParams.get("view") === "1";
   const pack = await buildTeamWorkpack();
   await writeAudit({
     actorId: user.id,
-    action: "WORKPACK_EXPORTED",
+    action: view ? "WORKPACK_VIEWED" : "WORKPACK_EXPORTED",
     entityType: "Workpack",
     details: {
       people: pack.people.length,
@@ -29,10 +30,13 @@ export async function GET() {
   });
 
   const day = pack.exportedAt.slice(0, 10);
-  return new NextResponse(JSON.stringify(pack, null, 2), {
+  const body = JSON.stringify(pack, null, 2);
+  return new NextResponse(body, {
     headers: {
       "Content-Type": "application/json; charset=utf-8",
-      "Content-Disposition": `attachment; filename="workplan-team-${day}.json"`,
+      "Content-Disposition": view
+        ? "inline"
+        : `attachment; filename="workplan-team-${day}.json"`,
       "Cache-Control": "no-store",
     },
   });
