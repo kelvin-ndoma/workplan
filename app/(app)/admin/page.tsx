@@ -4,6 +4,7 @@ import { sortByBriefingOrder } from "@/lib/briefing";
 import { isEmailConfigured } from "@/lib/email";
 import { PageHeader, UserAvatar } from "@/components/work-ui";
 import { InviteTeamButton, InviteTeammateForm, SendInviteButton, UserRoleSelect } from "@/components/admin/forms";
+import { TeamWorkpackPanel } from "@/components/admin/workpack";
 import type { Role } from "@/types";
 
 type TeamUser = {
@@ -87,6 +88,9 @@ export default async function AdminPage() {
             })}
           </div>
         </section>
+      </div>
+      <div className="mt-6">
+        <TeamWorkpackPanel />
       </div>
     </div>
   );
