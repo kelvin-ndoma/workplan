@@ -37,12 +37,38 @@ export const PEOPLE_WORK_FORMAT = "workplan-people-work";
 export const WORKPACK_VERSION = 1;
 export const WORKPACK_MAX_BYTES = 12 * 1024 * 1024;
 
-export const PEOPLE_WORK_CSV_HEADERS = ["project", "title", "assignees"] as const;
+export const PEOPLE_WORK_CSV_HEADERS = [
+  "project",
+  "title",
+  "assignees",
+  "description",
+  "deliverable",
+  "status",
+  "progress",
+  "priority",
+  "month",
+  "next_action",
+  "actions_taken",
+  "support",
+  "blocker",
+  "due_date",
+] as const;
 
 export type TransferRow = {
   project: string;
   title: string;
   assignees: string[];
+  description: string;
+  deliverable: string;
+  status: string;
+  progress: number;
+  priority: string;
+  month: string;
+  nextAction: string;
+  actionsTaken: string[];
+  support: string;
+  blocker: string;
+  dueDate: string | null;
 };
 
 export type PeopleWorkRow = {
@@ -52,13 +78,16 @@ export type PeopleWorkRow = {
   project: string;
   deliverable: string;
   task: string;
+  description: string;
   status: string;
   progress: number;
   priority: string;
   month: string;
   nextAction: string;
+  actionsTaken: string[];
   support: string;
   blocker: string;
+  dueDate: string | null;
 };
 
 type PackPerson = {
@@ -510,14 +539,52 @@ export function peopleWorkToCsv(rows: TransferRow[]) {
   const lines = [
     PEOPLE_WORK_CSV_HEADERS.join(","),
     ...rows.map((row) =>
-      [row.project, row.title, row.assignees.join(";")].map(csvCell).join(","),
+      [
+        row.project,
+        row.title,
+        row.assignees.join(";"),
+        row.description,
+        row.deliverable,
+        row.status,
+        row.progress,
+        row.priority,
+        row.month,
+        row.nextAction,
+        row.actionsTaken.join(" | "),
+        row.support,
+        row.blocker,
+        row.dueDate ?? "",
+      ]
+        .map(csvCell)
+        .join(","),
     ),
   ];
   return `${lines.join("\r\n")}\r\n`;
 }
 
 export function transferRowsToJson(rows: TransferRow[]) {
-  return `${JSON.stringify({ rows }, null, 2)}\n`;
+  return `${JSON.stringify(
+    {
+      rows: rows.map((row) => ({
+        project: row.project,
+        title: row.title,
+        assignees: row.assignees,
+        description: row.description,
+        deliverable: row.deliverable,
+        status: row.status,
+        progress: row.progress,
+        priority: row.priority,
+        month: row.month,
+        next_action: row.nextAction,
+        actions_taken: row.actionsTaken,
+        support: row.support,
+        blocker: row.blocker,
+        due_date: row.dueDate,
+      })),
+    },
+    null,
+    2,
+  )}\n`;
 }
 
 function parseAssigneeList(value: unknown): string[] {
@@ -545,16 +612,51 @@ function pickField(record: Record<string, unknown>, keys: string[]) {
   return undefined;
 }
 
+function parseListField(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean);
+  }
+  return String(value ?? "")
+    .split(/\s*\|\s*|\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function asNumber(value: unknown, fallback = 0) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number.parseInt(String(value ?? "").replace("%", ""), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 function transferFromUnknown(raw: unknown): TransferRow | null {
   if (!raw || typeof raw !== "object") return null;
   const record = raw as Record<string, unknown>;
   const project = str(pickField(record, ["project", "project name", "stream"])).trim();
-  const title = str(pickField(record, ["title", "task", "deliverable"])).trim();
+  const title = str(pickField(record, ["title", "task"])).trim();
+  const deliverable = str(pickField(record, ["deliverable"])).trim() || title;
   const assignees = parseAssigneeList(
     pickField(record, ["assignees", "owners", "assigned to", "email"]),
   );
   if (!project || !title || !assignees.length) return null;
-  return { project, title, assignees };
+  const nextParts = parseListField(
+    pickField(record, ["next action", "next actions", "nextaction"]),
+  );
+  return {
+    project,
+    title,
+    assignees,
+    description: str(pickField(record, ["description", "details", "notes", "body"])),
+    deliverable,
+    status: str(pickField(record, ["status"]), "NOT_STARTED"),
+    progress: asNumber(pickField(record, ["progress"])),
+    priority: str(pickField(record, ["priority"]), "MEDIUM"),
+    month: str(pickField(record, ["month", "work plan month", "workplanmonth"])),
+    nextAction: nextParts[0] || "",
+    actionsTaken: parseListField(pickField(record, ["actions taken", "actionstaken"])),
+    support: str(pickField(record, ["support", "support description", "supportdescription"])),
+    blocker: str(pickField(record, ["blocker"])),
+    dueDate: str(pickField(record, ["due date", "duedate"])) || null,
+  };
 }
 
 function parseTransferObjects(items: unknown[]): TransferRow[] | { error: string } {
@@ -629,17 +731,19 @@ export function parsePeopleWorkCsv(text: string): TransferRow[] | { error: strin
     };
   }
   return parseTransferObjects(
-    table.slice(1).map((entry) => ({
-      project: entry[project],
-      title: entry[title],
-      assignees: entry[assignees],
-    })),
+    table.slice(1).map((entry) => {
+      const record: Record<string, string> = {};
+      table[0].forEach((header, index) => {
+        record[header] = entry[index] ?? "";
+      });
+      return record;
+    }),
   );
 }
 
 function packFromTransferRows(rows: TransferRow[]): TeamWorkpack {
   const expanded: PeopleWorkRow[] = [];
-  const month = currentWorkPlanMonth();
+  const fallbackMonth = currentWorkPlanMonth();
   for (const row of rows) {
     for (const email of row.assignees) {
       expanded.push({
@@ -647,15 +751,18 @@ function packFromTransferRows(rows: TransferRow[]): TeamWorkpack {
         email,
         jobTitle: "",
         project: row.project,
-        deliverable: row.title,
+        deliverable: row.deliverable || row.title,
         task: row.title,
-        status: "NOT_STARTED",
-        progress: 0,
-        priority: "MEDIUM",
-        month,
-        nextAction: "",
-        support: "",
-        blocker: "",
+        description: row.description,
+        status: row.status || "NOT_STARTED",
+        progress: row.progress,
+        priority: row.priority || "MEDIUM",
+        month: row.month || fallbackMonth,
+        nextAction: row.nextAction,
+        actionsTaken: row.actionsTaken,
+        support: row.support,
+        blocker: row.blocker,
+        dueDate: row.dueDate,
       });
     }
   }
@@ -723,7 +830,7 @@ function packFromPeopleRows(rows: PeopleWorkRow[]): TeamWorkpack {
     tasks.push({
       id: `${email}|${deliverableId}|${row.task}|${month}`,
       title: row.task,
-      description: "",
+      description: row.description,
       projectId,
       deliverableId,
       assignedTo: email,
@@ -733,9 +840,9 @@ function packFromPeopleRows(rows: PeopleWorkRow[]): TeamWorkpack {
       progress: Math.min(100, Math.max(0, num(row.progress))),
       weight: 1,
       startDate: null,
-      dueDate: null,
+      dueDate: row.dueDate,
       completedAt: null,
-      actionsTaken: [],
+      actionsTaken: row.actionsTaken,
       nextAction: row.nextAction,
       nextActions: row.nextAction ? [row.nextAction] : [],
       supportNeeded: Boolean(row.support),
@@ -794,6 +901,7 @@ export async function buildTransferRows(): Promise<TransferRow[]> {
   const tasks = await Task.find({})
     .populate("assignedTo", "name email")
     .populate("projectId", "name")
+    .populate("deliverableId", "name")
     .lean();
 
   const latestMonth = new Map<string, string>();
@@ -805,7 +913,7 @@ export async function buildTransferRows(): Promise<TransferRow[]> {
     if (month && (!previous || month > previous)) latestMonth.set(key, month);
   }
 
-  const grouped = new Map<string, TransferRow>();
+  const rows: TransferRow[] = [];
   for (const task of tasks) {
     const assigned = task.assignedTo as { email?: string } | null;
     const email = str(assigned?.email).toLowerCase();
@@ -814,19 +922,32 @@ export async function buildTransferRows(): Promise<TransferRow[]> {
     const project = str((task.projectId as { name?: string } | null)?.name).trim();
     const title = str(task.title).trim();
     if (!project || !title) continue;
-    const key = `${normalizeName(project)}\0${normalizeName(title)}`;
-    const existing = grouped.get(key);
-    if (existing) {
-      if (!existing.assignees.includes(email)) existing.assignees.push(email);
-    } else {
-      grouped.set(key, { project, title, assignees: [email] });
-    }
+    const nextActions = strs(task.nextActions);
+    const due = task.dueDate ? iso(task.dueDate) : null;
+    rows.push({
+      project,
+      title,
+      assignees: [email],
+      description: str(task.description),
+      deliverable: str((task.deliverableId as { name?: string } | null)?.name, title),
+      status: str(task.status, "NOT_STARTED"),
+      progress: num(task.progress),
+      priority: str(task.priority, "MEDIUM"),
+      month: str(task.workPlanMonth),
+      nextAction: nextActions[0] || str(task.nextAction),
+      actionsTaken: strs(task.actionsTaken),
+      support: str(task.supportDescription),
+      blocker: str(task.blocker),
+      dueDate: due,
+    });
   }
 
-  return [...grouped.values()].sort((a, b) => {
+  return rows.sort((a, b) => {
     const project = a.project.localeCompare(b.project);
     if (project) return project;
-    return a.title.localeCompare(b.title);
+    const title = a.title.localeCompare(b.title);
+    if (title) return title;
+    return a.assignees[0].localeCompare(b.assignees[0]);
   });
 }
 

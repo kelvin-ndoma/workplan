@@ -4,6 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { TRANSFER_ACCEPT_PROMPT } from "@/lib/transfer-prompt";
 
 function filenameFromHeader(header: string | null, fallback: string) {
   const match = header?.match(/filename="([^"]+)"/);
@@ -46,7 +47,7 @@ export function TeamWorkpackPanel() {
         link.click();
         link.remove();
         URL.revokeObjectURL(url);
-        toast.success(kind === "csv" ? "Saved CSV (project, title, assignees)." : "Saved JSON (project, title, assignees).");
+        toast.success(kind === "csv" ? "Saved CSV with full task details." : "Saved JSON with full task details.");
       }
       setPreviewName(name);
       setPreview(text);
@@ -57,10 +58,9 @@ export function TeamWorkpackPanel() {
     <section className="rounded-2xl border bg-card p-5">
       <h2 className="text-sm font-semibold tracking-wide uppercase">Move team work</h2>
       <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        The other WorkPlan expects <strong>project</strong>, <strong>title</strong>, and{" "}
-        <strong>assignees</strong>. Download CSV or JSON in that layout. Projects match by name.
-        Title is the latest deliverable/task. Assignees are roster emails (mike@…), joined with{" "}
-        <code>;</code> if more than one person owns the same title.
+        Download CSV or JSON with each person’s latest work: project, title, description, status,
+        next action, and more. On the other WorkPlan, paste the accept prompt so it stores
+        description instead of only project and title.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" disabled={pending} onClick={() => loadPack("csv", "view")}>
@@ -71,6 +71,16 @@ export function TeamWorkpackPanel() {
         </Button>
         <Button type="button" variant="outline" disabled={pending} onClick={() => loadPack("json", "download")}>
           Download JSON
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={async () => {
+            await navigator.clipboard.writeText(TRANSFER_ACCEPT_PROMPT);
+            toast.success("Prompt copied. Paste it on the other WorkPlan.");
+          }}
+        >
+          Copy accept prompt
         </Button>
         <input
           ref={inputRef}
