@@ -58,8 +58,8 @@ export function TeamWorkpackPanel() {
     <section className="rounded-2xl border bg-card p-5">
       <h2 className="text-sm font-semibold tracking-wide uppercase">Move team work</h2>
       <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        Download CSV or JSON for the upcoming call only: current status, actions taken, and next
-        steps for that meeting — not older calls.
+        Download CSV or JSON for the upcoming call. Each row already names the teammate who owns
+        the task — the other site should assign them on upload, not ask you to pair people by hand.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" disabled={pending} onClick={() => loadPack("csv", "view")}>

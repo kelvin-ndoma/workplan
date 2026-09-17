@@ -535,7 +535,11 @@ export function parseTeamWorkpack(raw: unknown): TeamWorkpack | { error: string 
 }
 
 function csvCell(value: unknown) {
-  const text = String(value ?? "");
+  const text = String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\n+/g, " | ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
   return text;
 }
@@ -547,7 +551,7 @@ export function peopleWorkToCsv(rows: TransferRow[]) {
       [
         row.project,
         row.title,
-        row.assignees.join(";"),
+        assigneeTokens(row.assignees).join(";"),
         row.description,
         row.deliverable,
         row.status,
@@ -906,11 +910,44 @@ export function parseUploadedWork(text: string): TeamWorkpack | { error: string 
   return packFromTransferRows(rows);
 }
 
+function emailFrom(value: unknown, emailById: Map<string, string>) {
+  if (value == null || value === "") return "";
+  if (typeof value === "string") {
+    const text = value.trim().toLowerCase();
+    if (text.includes("@")) return text;
+    return emailById.get(text) ?? "";
+  }
+  if (typeof value !== "object") return "";
+  const record = value as { email?: unknown; id?: unknown };
+  const nested = str(record.email).trim().toLowerCase();
+  if (nested.includes("@")) return nested;
+  if (record.id) return emailById.get(String(record.id)) ?? "";
+  return "";
+}
+
+function assigneeTokens(emails: string[]) {
+  const tokens: string[] = [];
+  for (const email of emails) {
+    if (!tokens.includes(email)) tokens.push(email);
+    const key = email.split("@")[0]?.trim();
+    if (key && !tokens.includes(key)) tokens.push(key);
+  }
+  return tokens;
+}
+
 export async function buildTransferRows(): Promise<TransferRow[]> {
   await connectDB();
   const meeting = nextMeetingDateKey();
   const month = await resolveStatusMonth(meeting);
-  const tasks = (await getMonthTasks({ month })) as Array<Record<string, unknown>>;
+  const [tasks, people] = await Promise.all([
+    getMonthTasks({ month }) as Promise<Array<Record<string, unknown>>>,
+    User.find({ isActive: true }).select("email").lean(),
+  ]);
+  const emailById = new Map<string, string>();
+  for (const user of people) {
+    const email = str(user.email).toLowerCase();
+    if (email) emailById.set(String(user._id), email);
+  }
   const taskIds = tasks.map((task) => String(task.id ?? ""));
   const snapshots = await snapshotsForTasks(taskIds.filter(Boolean));
   const byTask = new Map<string, typeof snapshots>();
@@ -923,9 +960,12 @@ export async function buildTransferRows(): Promise<TransferRow[]> {
 
   const rows: TransferRow[] = [];
   for (const task of tasks) {
-    const assigned = task.assignedTo as { email?: string } | null;
-    const email = str(assigned?.email).toLowerCase();
-    if (!email) continue;
+    const emails = [
+      emailFrom(task.assignedTo, emailById),
+      emailFrom(task.createdBy, emailById),
+    ].filter(Boolean);
+    const uniqueEmails = [...new Set(emails)];
+    if (!uniqueEmails.length) continue;
     const exact = (byTask.get(String(task.id)) ?? []).find((row) => row.meetingDate === meeting);
     const live = overlayStatus(
       task,
@@ -948,16 +988,16 @@ export async function buildTransferRows(): Promise<TransferRow[]> {
     const support = str(live.supportDescription) || str(live.blocker);
     const writeup = [
       str(live.description),
-      actionsTaken.length ? `Actions taken:\n${actionsTaken.map((item) => `• ${item}`).join("\n")}` : "",
-      nextAction ? `Next:\n${nextActions.map((item) => `• ${item}`).join("\n") || `• ${nextAction}`}` : "",
-      support ? `Support:\n${support}` : "",
+      actionsTaken.length ? `Actions taken: ${actionsTaken.join(" | ")}` : "",
+      nextAction ? `Next: ${nextAction}` : "",
+      support ? `Support: ${support}` : "",
     ]
       .filter(Boolean)
-      .join("\n\n");
+      .join(" | ");
     rows.push({
       project,
       title,
-      assignees: [email],
+      assignees: uniqueEmails,
       description: writeup,
       deliverable: str((live.deliverableId as { name?: string } | null)?.name, title),
       status: str(live.status, "NOT_STARTED"),

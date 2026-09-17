@@ -25,4 +25,5 @@ project,title,assignees,description,deliverable,status,progress,priority,month,m
 JSON shape:
 { "meeting": "2026-09-18", "month": "2026-09", "rows": [ { "project": "CEAI", "title": "Institute Structure", "assignees": ["mike@theburnsbrothers.com"], "description": "…", "deliverable": "Institute Structure", "status": "IN_PROGRESS", "progress": 40, "priority": "MEDIUM", "month": "2026-09", "meeting": "2026-09-18", "next_action": "…", "actions_taken": ["…"], "support": "", "blocker": "", "due_date": null } ] }
 
-Do not ignore description. Show it on the task. Match projects by name and merge deliverables/tasks; do not wipe existing projects.`;
+JSON assignees must be an array of emails for that task (never empty). CSV assignees is emails joined with ; plus the email key (mike@…;mike). Do not show "Pair every task with at least one teammate" after a successful upload — the file already names the owner. Match each assignee to the roster by email, then key, then first name, and save that person on the task automatically.
+`;
