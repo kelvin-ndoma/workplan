@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { getSessionUser } from "@/lib/session";
 import { writeAudit } from "@/lib/services/events";
+import { nextMeetingDateKey } from "@/lib/meetings/cadence";
 import {
   WORKPACK_MAX_BYTES,
   buildTeamWorkpack,
@@ -48,11 +49,12 @@ export async function GET(request: Request) {
   }
 
   const rows = await buildTransferRows();
+  const stamp = rows[0]?.meeting || nextMeetingDateKey();
   await writeAudit({
     actorId: user.id,
     action: view ? "PEOPLE_WORK_VIEWED" : "PEOPLE_WORK_EXPORTED",
     entityType: "Workpack",
-    details: { rows: rows.length, format },
+    details: { rows: rows.length, format, meeting: stamp, month: rows[0]?.month ?? "" },
   });
 
   if (format === "json") {
@@ -61,7 +63,7 @@ export async function GET(request: Request) {
         "Content-Type": "application/json; charset=utf-8",
         "Content-Disposition": view
           ? "inline"
-          : `attachment; filename="workplan-people-${day}.json"`,
+          : `attachment; filename="workplan-upcoming-${stamp}.json"`,
         "Cache-Control": "no-store",
       },
     });
@@ -72,7 +74,7 @@ export async function GET(request: Request) {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": view
         ? "inline"
-        : `attachment; filename="workplan-people-${day}.csv"`,
+        : `attachment; filename="workplan-upcoming-${stamp}.csv"`,
       "Cache-Control": "no-store",
     },
   });

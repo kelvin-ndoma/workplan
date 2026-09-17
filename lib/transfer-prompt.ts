@@ -11,6 +11,7 @@ Also read and save these optional fields onto the matched task (create the task 
 - status — NOT_STARTED | IN_PROGRESS | AT_RISK | BLOCKED | COMPLETED | CANCELLED
 - progress — 0–100 number
 - priority — LOW | MEDIUM | HIGH | CRITICAL
+- meeting — upcoming call date YYYY-MM-DD; this file is for that call only, not past meetings
 - month (aliases: work_plan_month, workPlanMonth) — YYYY-MM
 - next_action (aliases: next_actions, nextAction) — planned next step; if several, split on | or newlines
 - actions_taken (aliases: actionsTaken) — work already done; split on | or newlines
@@ -19,9 +20,9 @@ Also read and save these optional fields onto the matched task (create the task 
 - due_date (aliases: dueDate) — ISO date if present
 
 CSV header row:
-project,title,assignees,description,deliverable,status,progress,priority,month,next_action,actions_taken,support,blocker,due_date
+project,title,assignees,description,deliverable,status,progress,priority,month,meeting,next_action,actions_taken,support,blocker,due_date
 
 JSON shape:
-{ "rows": [ { "project": "CEAI", "title": "Institute Structure", "assignees": ["mike@theburnsbrothers.com"], "description": "…", "deliverable": "Institute Structure", "status": "IN_PROGRESS", "progress": 40, "priority": "MEDIUM", "month": "2026-09", "next_action": "…", "actions_taken": ["…"], "support": "", "blocker": "", "due_date": null } ] }
+{ "meeting": "2026-09-18", "month": "2026-09", "rows": [ { "project": "CEAI", "title": "Institute Structure", "assignees": ["mike@theburnsbrothers.com"], "description": "…", "deliverable": "Institute Structure", "status": "IN_PROGRESS", "progress": 40, "priority": "MEDIUM", "month": "2026-09", "meeting": "2026-09-18", "next_action": "…", "actions_taken": ["…"], "support": "", "blocker": "", "due_date": null } ] }
 
 Do not ignore description. Show it on the task. Match projects by name and merge deliverables/tasks; do not wipe existing projects.`;

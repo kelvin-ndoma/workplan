@@ -47,7 +47,7 @@ export function TeamWorkpackPanel() {
         link.click();
         link.remove();
         URL.revokeObjectURL(url);
-        toast.success(kind === "csv" ? "Saved CSV with full task details." : "Saved JSON with full task details.");
+        toast.success(kind === "csv" ? "Saved the upcoming call CSV." : "Saved the upcoming call JSON.");
       }
       setPreviewName(name);
       setPreview(text);
@@ -58,9 +58,8 @@ export function TeamWorkpackPanel() {
     <section className="rounded-2xl border bg-card p-5">
       <h2 className="text-sm font-semibold tracking-wide uppercase">Move team work</h2>
       <p className="mt-1 mb-4 text-sm text-muted-foreground">
-        Download CSV or JSON with each person’s latest work: project, title, description, status,
-        next action, and more. On the other WorkPlan, paste the accept prompt so it stores
-        description instead of only project and title.
+        Download CSV or JSON for the upcoming call only: current status, actions taken, and next
+        steps for that meeting — not older calls.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <Button type="button" variant="outline" disabled={pending} onClick={() => loadPack("csv", "view")}>

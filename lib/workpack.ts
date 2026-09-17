@@ -2,6 +2,9 @@ import { randomBytes } from "crypto";
 import { connectDB } from "@/lib/db";
 import { currentWorkPlanMonth } from "@/lib/dates";
 import { hashPassword } from "@/lib/password";
+import { fieldsFromTask, overlayStatus, snapshotsForTasks } from "@/lib/meeting-status";
+import { nextMeetingDateKey } from "@/lib/meetings/cadence";
+import { getMonthTasks, resolveStatusMonth } from "@/lib/queries";
 import { recalculateProgress } from "@/lib/services/progress";
 import {
   Comment,
@@ -47,6 +50,7 @@ export const PEOPLE_WORK_CSV_HEADERS = [
   "progress",
   "priority",
   "month",
+  "meeting",
   "next_action",
   "actions_taken",
   "support",
@@ -64,6 +68,7 @@ export type TransferRow = {
   progress: number;
   priority: string;
   month: string;
+  meeting: string;
   nextAction: string;
   actionsTaken: string[];
   support: string;
@@ -549,6 +554,7 @@ export function peopleWorkToCsv(rows: TransferRow[]) {
         row.progress,
         row.priority,
         row.month,
+        row.meeting,
         row.nextAction,
         row.actionsTaken.join(" | "),
         row.support,
@@ -565,6 +571,8 @@ export function peopleWorkToCsv(rows: TransferRow[]) {
 export function transferRowsToJson(rows: TransferRow[]) {
   return `${JSON.stringify(
     {
+      meeting: rows[0]?.meeting ?? "",
+      month: rows[0]?.month ?? "",
       rows: rows.map((row) => ({
         project: row.project,
         title: row.title,
@@ -575,6 +583,7 @@ export function transferRowsToJson(rows: TransferRow[]) {
         progress: row.progress,
         priority: row.priority,
         month: row.month,
+        meeting: row.meeting,
         next_action: row.nextAction,
         actions_taken: row.actionsTaken,
         support: row.support,
@@ -651,7 +660,8 @@ function transferFromUnknown(raw: unknown): TransferRow | null {
     progress: asNumber(pickField(record, ["progress"])),
     priority: str(pickField(record, ["priority"]), "MEDIUM"),
     month: str(pickField(record, ["month", "work plan month", "workplanmonth"])),
-    nextAction: nextParts[0] || "",
+    meeting: str(pickField(record, ["meeting", "meeting date", "meetingdate"])),
+    nextAction: nextParts.join(" | "),
     actionsTaken: parseListField(pickField(record, ["actions taken", "actionstaken"])),
     support: str(pickField(record, ["support", "support description", "supportdescription"])),
     blocker: str(pickField(record, ["blocker"])),
@@ -898,19 +908,17 @@ export function parseUploadedWork(text: string): TeamWorkpack | { error: string 
 
 export async function buildTransferRows(): Promise<TransferRow[]> {
   await connectDB();
-  const tasks = await Task.find({})
-    .populate("assignedTo", "name email")
-    .populate("projectId", "name")
-    .populate("deliverableId", "name")
-    .lean();
-
-  const latestMonth = new Map<string, string>();
-  for (const task of tasks) {
-    const assigned = task.assignedTo as { email?: string } | null;
-    const key = str(assigned?.email).toLowerCase() || "unassigned";
-    const month = str(task.workPlanMonth);
-    const previous = latestMonth.get(key);
-    if (month && (!previous || month > previous)) latestMonth.set(key, month);
+  const meeting = nextMeetingDateKey();
+  const month = await resolveStatusMonth(meeting);
+  const tasks = (await getMonthTasks({ month })) as Array<Record<string, unknown>>;
+  const taskIds = tasks.map((task) => String(task.id ?? ""));
+  const snapshots = await snapshotsForTasks(taskIds.filter(Boolean));
+  const byTask = new Map<string, typeof snapshots>();
+  for (const row of snapshots) {
+    const id = String(row.taskId);
+    const list = byTask.get(id) ?? [];
+    list.push(row);
+    byTask.set(id, list);
   }
 
   const rows: TransferRow[] = [];
@@ -918,27 +926,50 @@ export async function buildTransferRows(): Promise<TransferRow[]> {
     const assigned = task.assignedTo as { email?: string } | null;
     const email = str(assigned?.email).toLowerCase();
     if (!email) continue;
-    if (str(task.workPlanMonth) !== latestMonth.get(email)) continue;
-    const project = str((task.projectId as { name?: string } | null)?.name).trim();
-    const title = str(task.title).trim();
+    const exact = (byTask.get(String(task.id)) ?? []).find((row) => row.meetingDate === meeting);
+    const live = overlayStatus(
+      task,
+      exact
+        ? {
+            actionsTaken: (exact.actionsTaken ?? []).map(String),
+            nextActions: (exact.nextActions ?? []).map(String),
+            supportDescription: String(exact.supportDescription ?? ""),
+            status: String(exact.status ?? "NOT_STARTED"),
+            progress: Number(exact.progress ?? 0),
+          }
+        : fieldsFromTask(task),
+    );
+    const project = str((live.projectId as { name?: string } | null)?.name).trim();
+    const title = str(live.title).trim();
     if (!project || !title) continue;
-    const nextActions = strs(task.nextActions);
-    const due = task.dueDate ? iso(task.dueDate) : null;
+    const nextActions = strs(live.nextActions);
+    const nextAction = nextActions.join(" | ") || str(live.nextAction);
+    const actionsTaken = strs(live.actionsTaken);
+    const support = str(live.supportDescription) || str(live.blocker);
+    const writeup = [
+      str(live.description),
+      actionsTaken.length ? `Actions taken:\n${actionsTaken.map((item) => `• ${item}`).join("\n")}` : "",
+      nextAction ? `Next:\n${nextActions.map((item) => `• ${item}`).join("\n") || `• ${nextAction}`}` : "",
+      support ? `Support:\n${support}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
     rows.push({
       project,
       title,
       assignees: [email],
-      description: str(task.description),
-      deliverable: str((task.deliverableId as { name?: string } | null)?.name, title),
-      status: str(task.status, "NOT_STARTED"),
-      progress: num(task.progress),
-      priority: str(task.priority, "MEDIUM"),
-      month: str(task.workPlanMonth),
-      nextAction: nextActions[0] || str(task.nextAction),
-      actionsTaken: strs(task.actionsTaken),
-      support: str(task.supportDescription),
-      blocker: str(task.blocker),
-      dueDate: due,
+      description: writeup,
+      deliverable: str((live.deliverableId as { name?: string } | null)?.name, title),
+      status: str(live.status, "NOT_STARTED"),
+      progress: num(live.progress),
+      priority: str(live.priority, "MEDIUM"),
+      month,
+      meeting,
+      nextAction,
+      actionsTaken,
+      support,
+      blocker: str(live.blocker) || support,
+      dueDate: live.dueDate ? iso(live.dueDate) : null,
     });
   }
 
