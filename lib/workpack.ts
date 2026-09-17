@@ -1,6 +1,8 @@
 import { randomBytes } from "crypto";
 import { connectDB } from "@/lib/db";
+import { currentWorkPlanMonth } from "@/lib/dates";
 import { hashPassword } from "@/lib/password";
+import { recalculateProgress } from "@/lib/services/progress";
 import {
   Comment,
   Decision,
@@ -31,8 +33,33 @@ import {
 } from "@/types";
 
 export const WORKPACK_FORMAT = "workplan-team-pack";
+export const PEOPLE_WORK_FORMAT = "workplan-people-work";
 export const WORKPACK_VERSION = 1;
 export const WORKPACK_MAX_BYTES = 12 * 1024 * 1024;
+
+export const PEOPLE_WORK_CSV_HEADERS = ["project", "title", "assignees"] as const;
+
+export type TransferRow = {
+  project: string;
+  title: string;
+  assignees: string[];
+};
+
+export type PeopleWorkRow = {
+  person: string;
+  email: string;
+  jobTitle: string;
+  project: string;
+  deliverable: string;
+  task: string;
+  status: string;
+  progress: number;
+  priority: string;
+  month: string;
+  nextAction: string;
+  support: string;
+  blocker: string;
+};
 
 type PackPerson = {
   id: string;
@@ -196,8 +223,15 @@ export type WorkpackImportCounts = {
   peopleMatched: number;
   departments: number;
   projects: number;
+  projectsMatched: number;
+  projectsCreated: number;
+  unmatchedProjects: string[];
   deliverables: number;
+  deliverablesMatched: number;
+  deliverablesCreated: number;
   tasks: number;
+  tasksUpdated: number;
+  tasksCreated: number;
   monthFocus: number;
   meetings: number;
   meetingStatuses: number;
@@ -254,8 +288,16 @@ function escapeRegex(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function normalizeName(name: string) {
+  return name.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function nameQuery(name: string) {
   return { name: new RegExp(`^${escapeRegex(name.trim())}$`, "i") };
+}
+
+function titleQuery(title: string) {
+  return { title: new RegExp(`^${escapeRegex(title.trim())}$`, "i") };
 }
 
 function mapUser(
@@ -439,8 +481,15 @@ export async function buildTeamWorkpack(): Promise<TeamWorkpack> {
 export function parseTeamWorkpack(raw: unknown): TeamWorkpack | { error: string } {
   if (!raw || typeof raw !== "object") return { error: "That file is not a WorkPlan pack." };
   const pack = raw as Record<string, unknown>;
+  if (Array.isArray(pack.rows)) {
+    const rows = parseTransferObjects(pack.rows);
+    if ("error" in rows) return rows;
+    return packFromTransferRows(rows);
+  }
   if (pack.format !== WORKPACK_FORMAT) {
-    return { error: "That file is not a WorkPlan team pack." };
+    return {
+      error: "That file needs rows with project, title, and assignees.",
+    };
   }
   if (pack.version !== WORKPACK_VERSION) {
     return { error: "This pack is from a different WorkPlan version." };
@@ -451,18 +500,361 @@ export function parseTeamWorkpack(raw: unknown): TeamWorkpack | { error: string 
   return pack as TeamWorkpack;
 }
 
+function csvCell(value: unknown) {
+  const text = String(value ?? "");
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+export function peopleWorkToCsv(rows: TransferRow[]) {
+  const lines = [
+    PEOPLE_WORK_CSV_HEADERS.join(","),
+    ...rows.map((row) =>
+      [row.project, row.title, row.assignees.join(";")].map(csvCell).join(","),
+    ),
+  ];
+  return `${lines.join("\r\n")}\r\n`;
+}
+
+export function transferRowsToJson(rows: TransferRow[]) {
+  return `${JSON.stringify({ rows }, null, 2)}\n`;
+}
+
+function parseAssigneeList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return [...new Set(value.flatMap((item) => parseAssigneeList(item)))];
+  }
+  return [
+    ...new Set(
+      String(value ?? "")
+        .split(/[;,|]/)
+        .map((part) => part.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+}
+
+function pickField(record: Record<string, unknown>, keys: string[]) {
+  const lookup = new Map<string, unknown>();
+  for (const [key, nested] of Object.entries(record)) {
+    lookup.set(headerKey(key), nested);
+  }
+  for (const key of keys) {
+    if (lookup.has(key)) return lookup.get(key);
+  }
+  return undefined;
+}
+
+function transferFromUnknown(raw: unknown): TransferRow | null {
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const project = str(pickField(record, ["project", "project name", "stream"])).trim();
+  const title = str(pickField(record, ["title", "task", "deliverable"])).trim();
+  const assignees = parseAssigneeList(
+    pickField(record, ["assignees", "owners", "assigned to", "email"]),
+  );
+  if (!project || !title || !assignees.length) return null;
+  return { project, title, assignees };
+}
+
+function parseTransferObjects(items: unknown[]): TransferRow[] | { error: string } {
+  const rows = items.map(transferFromUnknown).filter((row): row is TransferRow => Boolean(row));
+  if (!rows.length) {
+    return { error: "Each row needs project, title, and assignees." };
+  }
+  return rows;
+}
+
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = "";
+  let inQuotes = false;
+  const src = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (src[i + 1] === '"') {
+          cell += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += ch;
+      }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (ch === "\n") {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += ch;
+    }
+  }
+  if (cell.length || row.length) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows.filter((entry) => entry.some((value) => value.trim()));
+}
+
+function headerKey(value: string) {
+  return value.trim().toLowerCase().replace(/[_-]+/g, " ");
+}
+
+export function parsePeopleWorkCsv(text: string): TransferRow[] | { error: string } {
+  const table = parseCsv(text);
+  if (table.length < 2) return { error: "That CSV has no work rows." };
+  const headers = table[0].map(headerKey);
+  const col = (...names: string[]) => {
+    for (const name of names) {
+      const index = headers.indexOf(name);
+      if (index >= 0) return index;
+    }
+    return -1;
+  };
+  const project = col("project", "project name", "stream");
+  const title = col("title", "task", "deliverable");
+  const assignees = col("assignees", "owners", "assigned to", "email");
+  if (project < 0 || title < 0 || assignees < 0) {
+    return {
+      error: "That CSV needs columns project, title, and assignees.",
+    };
+  }
+  return parseTransferObjects(
+    table.slice(1).map((entry) => ({
+      project: entry[project],
+      title: entry[title],
+      assignees: entry[assignees],
+    })),
+  );
+}
+
+function packFromTransferRows(rows: TransferRow[]): TeamWorkpack {
+  const expanded: PeopleWorkRow[] = [];
+  const month = currentWorkPlanMonth();
+  for (const row of rows) {
+    for (const email of row.assignees) {
+      expanded.push({
+        person: email,
+        email,
+        jobTitle: "",
+        project: row.project,
+        deliverable: row.title,
+        task: row.title,
+        status: "NOT_STARTED",
+        progress: 0,
+        priority: "MEDIUM",
+        month,
+        nextAction: "",
+        support: "",
+        blocker: "",
+      });
+    }
+  }
+  return packFromPeopleRows(expanded);
+}
+
+function packFromPeopleRows(rows: PeopleWorkRow[]): TeamWorkpack {
+  const people = new Map<string, PackPerson>();
+  const projects = new Map<string, PackProject>();
+  const deliverables = new Map<string, PackDeliverable>();
+  const tasks: PackTask[] = [];
+
+  for (const row of rows) {
+    const email = row.email.trim().toLowerCase();
+    if (!email || !row.project || !row.deliverable || !row.task) continue;
+    if (!people.has(email)) {
+      people.set(email, {
+        id: email,
+        name: row.person || email,
+        email,
+        role: "TEAM_MEMBER",
+        jobTitle: row.jobTitle,
+        avatar: "",
+        departmentId: "",
+        managerId: "",
+        isActive: true,
+      });
+    }
+    const projectId = `project:${row.project.toLowerCase()}`;
+    if (!projects.has(projectId)) {
+      projects.set(projectId, {
+        id: projectId,
+        name: row.project,
+        description: "",
+        ownerId: email,
+        memberIds: [email],
+        departmentId: "",
+        status: "ACTIVE",
+        priority: inSet(row.priority, PRIORITIES, "MEDIUM"),
+        startDate: null,
+        targetDate: null,
+        progress: 0,
+        color: "#2563eb",
+      });
+    } else {
+      const project = projects.get(projectId)!;
+      if (!project.memberIds.includes(email)) project.memberIds.push(email);
+    }
+    const deliverableId = `${projectId}|${row.deliverable.toLowerCase()}`;
+    if (!deliverables.has(deliverableId)) {
+      deliverables.set(deliverableId, {
+        id: deliverableId,
+        projectId,
+        name: row.deliverable,
+        description: "",
+        ownerId: email,
+        progress: num(row.progress),
+        status: "ACTIVE",
+        priority: inSet(row.priority, PRIORITIES, "MEDIUM"),
+        startDate: null,
+        dueDate: null,
+      });
+    }
+    const month = row.month || currentWorkPlanMonth();
+    tasks.push({
+      id: `${email}|${deliverableId}|${row.task}|${month}`,
+      title: row.task,
+      description: "",
+      projectId,
+      deliverableId,
+      assignedTo: email,
+      createdBy: email,
+      status: inSet(row.status, TASK_STATUSES, "NOT_STARTED"),
+      priority: inSet(row.priority, PRIORITIES, "MEDIUM"),
+      progress: Math.min(100, Math.max(0, num(row.progress))),
+      weight: 1,
+      startDate: null,
+      dueDate: null,
+      completedAt: null,
+      actionsTaken: [],
+      nextAction: row.nextAction,
+      nextActions: row.nextAction ? [row.nextAction] : [],
+      supportNeeded: Boolean(row.support),
+      supportDescription: row.support,
+      blocker: row.blocker,
+      blockedBy: "",
+      dependencyIds: [],
+      tags: [],
+      workPlanMonth: month,
+      talkingPoints: [],
+      meetingId: "",
+    });
+  }
+
+  return {
+    format: WORKPACK_FORMAT,
+    version: WORKPACK_VERSION,
+    exportedAt: new Date().toISOString(),
+    people: [...people.values()],
+    departments: [],
+    projects: [...projects.values()],
+    deliverables: [...deliverables.values()],
+    tasks,
+    monthFocus: [],
+    meetings: [],
+    meetingStatuses: [],
+    supportRequests: [],
+    comments: [],
+    decisions: [],
+  };
+}
+
+export function parseUploadedWork(text: string): TeamWorkpack | { error: string } {
+  const trimmed = text.replace(/^\uFEFF/, "").trim();
+  if (!trimmed) return { error: "That file is empty." };
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    try {
+      const raw = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(raw)) {
+        const rows = parseTransferObjects(raw);
+        if ("error" in rows) return rows;
+        return packFromTransferRows(rows);
+      }
+      return parseTeamWorkpack(raw);
+    } catch {
+      return { error: "That JSON file is not valid." };
+    }
+  }
+  const rows = parsePeopleWorkCsv(trimmed);
+  if ("error" in rows) return rows;
+  return packFromTransferRows(rows);
+}
+
+export async function buildTransferRows(): Promise<TransferRow[]> {
+  await connectDB();
+  const tasks = await Task.find({})
+    .populate("assignedTo", "name email")
+    .populate("projectId", "name")
+    .lean();
+
+  const latestMonth = new Map<string, string>();
+  for (const task of tasks) {
+    const assigned = task.assignedTo as { email?: string } | null;
+    const key = str(assigned?.email).toLowerCase() || "unassigned";
+    const month = str(task.workPlanMonth);
+    const previous = latestMonth.get(key);
+    if (month && (!previous || month > previous)) latestMonth.set(key, month);
+  }
+
+  const grouped = new Map<string, TransferRow>();
+  for (const task of tasks) {
+    const assigned = task.assignedTo as { email?: string } | null;
+    const email = str(assigned?.email).toLowerCase();
+    if (!email) continue;
+    if (str(task.workPlanMonth) !== latestMonth.get(email)) continue;
+    const project = str((task.projectId as { name?: string } | null)?.name).trim();
+    const title = str(task.title).trim();
+    if (!project || !title) continue;
+    const key = `${normalizeName(project)}\0${normalizeName(title)}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      if (!existing.assignees.includes(email)) existing.assignees.push(email);
+    } else {
+      grouped.set(key, { project, title, assignees: [email] });
+    }
+  }
+
+  return [...grouped.values()].sort((a, b) => {
+    const project = a.project.localeCompare(b.project);
+    if (project) return project;
+    return a.title.localeCompare(b.title);
+  });
+}
+
+export async function buildPeopleWorkRows(): Promise<TransferRow[]> {
+  return buildTransferRows();
+}
+
 export async function importTeamWorkpack(
   pack: TeamWorkpack,
   actor: { id: string; email: string },
+  options?: { mode?: "merge" | "full" },
 ): Promise<WorkpackImportCounts> {
   await connectDB();
+  const merge = options?.mode !== "full";
   const counts: WorkpackImportCounts = {
     peopleCreated: 0,
     peopleMatched: 0,
     departments: 0,
     projects: 0,
+    projectsMatched: 0,
+    projectsCreated: 0,
+    unmatchedProjects: [],
     deliverables: 0,
+    deliverablesMatched: 0,
+    deliverablesCreated: 0,
     tasks: 0,
+    tasksUpdated: 0,
+    tasksCreated: 0,
     monthFocus: 0,
     meetings: 0,
     meetingStatuses: 0,
@@ -472,7 +864,11 @@ export async function importTeamWorkpack(
   };
 
   const userIds = new Map<string, string>();
-  const actorEmail = actor.email.toLowerCase();
+  const destUsers = await User.find({}).select("email").lean();
+  for (const user of destUsers) {
+    const email = str(user.email).toLowerCase();
+    if (email) userIds.set(email, String(user._id));
+  }
 
   for (const person of pack.people ?? []) {
     const email = str(person.email).toLowerCase().trim();
@@ -494,22 +890,28 @@ export async function importTeamWorkpack(
       });
       counts.peopleCreated += 1;
     } else {
-      const nextRole = email === actorEmail ? user.role : role;
-      await User.updateOne(
-        { _id: user._id },
-        {
-          $set: {
-            name,
-            jobTitle: str(person.jobTitle, str(user.jobTitle)),
-            avatar: str(person.avatar, str(user.avatar)),
-            role: nextRole,
-            isActive: person.isActive !== false,
-          },
-        },
-      );
       counts.peopleMatched += 1;
+      if (!merge) {
+        const nextRole = email === actor.email.toLowerCase() ? user.role : role;
+        await User.updateOne(
+          { _id: user._id },
+          {
+            $set: {
+              name,
+              jobTitle: str(person.jobTitle, str(user.jobTitle)),
+              avatar: str(person.avatar, str(user.avatar)),
+              role: nextRole,
+              isActive: person.isActive !== false,
+            },
+          },
+        );
+      } else if (!str(user.jobTitle) && str(person.jobTitle)) {
+        await User.updateOne({ _id: user._id }, { $set: { jobTitle: person.jobTitle } });
+      }
     }
-    userIds.set(sid(person.id), String(user._id));
+    const destId = String(user._id);
+    userIds.set(sid(person.id), destId);
+    userIds.set(email, destId);
   }
 
   if (!userIds.size) {
@@ -519,56 +921,80 @@ export async function importTeamWorkpack(
   const fallbackUser = actor.id;
 
   const departmentIds = new Map<string, string>();
-  for (const dept of pack.departments ?? []) {
-    const name = str(dept.name).trim();
-    if (!name) continue;
-    const payload = {
-      name,
-      description: str(dept.description),
-      managerId: mapUser(userIds, dept.managerId),
-      memberIds: mapUsers(userIds, dept.memberIds ?? []),
-    };
-    let existing = await Department.findOne(nameQuery(name));
-    if (!existing) existing = await Department.create(payload);
-    else await Department.updateOne({ _id: existing._id }, { $set: payload });
-    departmentIds.set(sid(dept.id), String(existing._id));
-    counts.departments += 1;
+  if (!merge) {
+    for (const dept of pack.departments ?? []) {
+      const name = str(dept.name).trim();
+      if (!name) continue;
+      const payload = {
+        name,
+        description: str(dept.description),
+        managerId: mapUser(userIds, dept.managerId),
+        memberIds: mapUsers(userIds, dept.memberIds ?? []),
+      };
+      let existing = await Department.findOne(nameQuery(name));
+      if (!existing) existing = await Department.create(payload);
+      else await Department.updateOne({ _id: existing._id }, { $set: payload });
+      departmentIds.set(sid(dept.id), String(existing._id));
+      counts.departments += 1;
+    }
+
+    for (const person of pack.people ?? []) {
+      const destId = userIds.get(sid(person.id));
+      if (!destId) continue;
+      await User.updateOne(
+        { _id: destId },
+        {
+          $set: {
+            departmentId: departmentIds.get(sid(person.departmentId)),
+            managerId: mapUser(userIds, person.managerId),
+          },
+        },
+      );
+    }
   }
 
-  for (const person of pack.people ?? []) {
-    const destId = userIds.get(sid(person.id));
-    if (!destId) continue;
-    await User.updateOne(
-      { _id: destId },
-      {
-        $set: {
-          departmentId: departmentIds.get(sid(person.departmentId)),
-          managerId: mapUser(userIds, person.managerId),
-        },
-      },
-    );
-  }
+  const destProjects = await Project.find({}).select("name memberIds").lean();
+  const projectByName = new Map(
+    destProjects.map((project) => [normalizeName(str(project.name)), project]),
+  );
 
   const projectIds = new Map<string, string>();
   for (const project of pack.projects ?? []) {
     const name = str(project.name).trim();
     if (!name) continue;
-    const payload = {
-      name,
-      description: str(project.description),
-      ownerId: mapUser(userIds, project.ownerId, fallbackUser),
-      memberIds: mapUsers(userIds, project.memberIds ?? []),
-      departmentId: departmentIds.get(sid(project.departmentId)),
-      status: inSet(project.status, PROJECT_STATUSES, "ACTIVE"),
-      priority: inSet(project.priority, PRIORITIES, "MEDIUM"),
-      startDate: asDate(project.startDate),
-      targetDate: asDate(project.targetDate),
-      progress: num(project.progress),
-      color: str(project.color, "#2563eb"),
-    };
-    let existing = await Project.findOne(nameQuery(name));
-    if (!existing) existing = await Project.create(payload);
-    else await Project.updateOne({ _id: existing._id }, { $set: payload });
+    const memberIds = mapUsers(userIds, project.memberIds ?? []);
+    const ownerId = mapUser(userIds, project.ownerId, fallbackUser);
+    let existing = projectByName.get(normalizeName(name));
+    if (!existing) {
+      existing = await Project.findOne(nameQuery(name));
+    }
+    if (!existing) {
+      const created = await Project.create({
+        name,
+        description: str(project.description),
+        ownerId,
+        memberIds,
+        departmentId: departmentIds.get(sid(project.departmentId)),
+        status: inSet(project.status, PROJECT_STATUSES, "ACTIVE"),
+        priority: inSet(project.priority, PRIORITIES, "MEDIUM"),
+        startDate: asDate(project.startDate),
+        targetDate: asDate(project.targetDate),
+        progress: num(project.progress),
+        color: str(project.color, "#2563eb"),
+      });
+      existing = created;
+      counts.projectsCreated += 1;
+      counts.unmatchedProjects.push(name);
+      projectByName.set(normalizeName(name), created);
+    } else {
+      counts.projectsMatched += 1;
+      if (memberIds.length) {
+        await Project.updateOne(
+          { _id: existing._id },
+          { $addToSet: { memberIds: { $each: memberIds } } },
+        );
+      }
+    }
     projectIds.set(sid(project.id), String(existing._id));
     counts.projects += 1;
   }
@@ -590,14 +1016,29 @@ export async function importTeamWorkpack(
       dueDate: asDate(item.dueDate),
     };
     let existing = await Deliverable.findOne({ projectId, ...nameQuery(name) });
-    if (!existing) existing = await Deliverable.create(payload);
-    else await Deliverable.updateOne({ _id: existing._id }, { $set: payload });
+    if (!existing) {
+      existing = await Deliverable.create(payload);
+      counts.deliverablesCreated += 1;
+    } else {
+      counts.deliverablesMatched += 1;
+      const next: Record<string, unknown> = {
+        progress: payload.progress,
+        status: payload.status,
+        priority: payload.priority,
+      };
+      if (payload.description) next.description = payload.description;
+      if (payload.startDate) next.startDate = payload.startDate;
+      if (payload.dueDate) next.dueDate = payload.dueDate;
+      await Deliverable.updateOne({ _id: existing._id }, { $set: next });
+    }
     deliverableIds.set(sid(item.id), String(existing._id));
     counts.deliverables += 1;
   }
 
   const taskIds = new Map<string, string>();
   const pendingDeps: { destId: string; oldDeps: string[] }[] = [];
+  const touchedProjects = new Set<string>();
+  const touchedDeliverables = new Set<string>();
   for (const task of pack.tasks ?? []) {
     const projectId = projectIds.get(sid(task.projectId));
     const deliverableId = deliverableIds.get(sid(task.deliverableId));
@@ -605,41 +1046,69 @@ export async function importTeamWorkpack(
     const workPlanMonth = str(task.workPlanMonth).trim();
     if (!projectId || !deliverableId || !title || !workPlanMonth) continue;
     const assignedTo = mapUser(userIds, task.assignedTo);
-    const payload = {
+    const latest: Record<string, unknown> = {
       title,
-      description: str(task.description),
       projectId,
       deliverableId,
       assignedTo,
-      createdBy: mapUser(userIds, task.createdBy, fallbackUser),
       status: inSet(task.status, TASK_STATUSES, "NOT_STARTED"),
       priority: inSet(task.priority, PRIORITIES, "MEDIUM"),
       progress: num(task.progress),
-      weight: Math.max(1, num(task.weight, 1)),
-      startDate: asDate(task.startDate),
-      dueDate: asDate(task.dueDate),
-      completedAt: asDate(task.completedAt),
-      actionsTaken: strs(task.actionsTaken),
-      nextAction: str(task.nextAction),
-      nextActions: strs(task.nextActions),
-      supportNeeded: bool(task.supportNeeded),
-      supportDescription: str(task.supportDescription),
-      blocker: str(task.blocker),
-      blockedBy: mapUser(userIds, task.blockedBy),
-      tags: strs(task.tags),
       workPlanMonth,
-      talkingPoints: strs(task.talkingPoints),
     };
-    const query: Record<string, unknown> = { projectId, deliverableId, title, workPlanMonth };
-    if (assignedTo) query.assignedTo = assignedTo;
-    else query.$or = [{ assignedTo: null }, { assignedTo: { $exists: false } }];
-    let existing = await Task.findOne(query);
-    if (!existing) existing = await Task.create(payload);
-    else await Task.updateOne({ _id: existing._id }, { $set: payload });
+    if (str(task.description)) latest.description = task.description;
+    if (str(task.nextAction)) {
+      latest.nextAction = task.nextAction;
+      latest.nextActions = strs(task.nextActions).length ? strs(task.nextActions) : [task.nextAction];
+    } else if (strs(task.nextActions).length) {
+      latest.nextActions = strs(task.nextActions);
+      latest.nextAction = task.nextActions[0];
+    }
+    if (str(task.supportDescription) || task.supportNeeded) {
+      latest.supportNeeded = bool(task.supportNeeded);
+      latest.supportDescription = str(task.supportDescription);
+    }
+    if (str(task.blocker)) latest.blocker = task.blocker;
+    if (strs(task.actionsTaken).length) latest.actionsTaken = strs(task.actionsTaken);
+    if (strs(task.talkingPoints).length) latest.talkingPoints = strs(task.talkingPoints);
+    if (strs(task.tags).length) latest.tags = strs(task.tags);
+    if (asDate(task.dueDate)) latest.dueDate = asDate(task.dueDate);
+    if (asDate(task.startDate)) latest.startDate = asDate(task.startDate);
+    if (asDate(task.completedAt)) latest.completedAt = asDate(task.completedAt);
+    const blockedBy = mapUser(userIds, task.blockedBy);
+    if (blockedBy) latest.blockedBy = blockedBy;
+
+    const titleMatch = titleQuery(title);
+    let existing = assignedTo
+      ? await Task.findOne({ projectId, assignedTo, ...titleMatch, workPlanMonth })
+      : await Task.findOne({
+          projectId,
+          ...titleMatch,
+          workPlanMonth,
+          $or: [{ assignedTo: null }, { assignedTo: { $exists: false } }],
+        });
+    if (!existing && assignedTo) {
+      existing = await Task.findOne({ projectId, assignedTo, ...titleMatch }).sort({
+        workPlanMonth: -1,
+      });
+    }
+    if (!existing) {
+      existing = await Task.create({
+        ...latest,
+        createdBy: mapUser(userIds, task.createdBy, fallbackUser),
+        weight: Math.max(1, num(task.weight, 1)),
+      });
+      counts.tasksCreated += 1;
+    } else {
+      await Task.updateOne({ _id: existing._id }, { $set: latest });
+      counts.tasksUpdated += 1;
+    }
     taskIds.set(sid(task.id), String(existing._id));
     if (task.dependencyIds?.length) {
       pendingDeps.push({ destId: String(existing._id), oldDeps: task.dependencyIds });
     }
+    touchedProjects.add(projectId);
+    touchedDeliverables.add(deliverableId);
     counts.tasks += 1;
   }
 
@@ -648,6 +1117,17 @@ export async function importTeamWorkpack(
       .map((id) => taskIds.get(id))
       .filter((id): id is string => Boolean(id));
     await Task.updateOne({ _id: item.destId }, { $set: { dependencyIds } });
+  }
+
+  for (const deliverableId of touchedDeliverables) {
+    await recalculateProgress({ deliverableId });
+  }
+  for (const projectId of touchedProjects) {
+    await recalculateProgress({ projectId });
+  }
+
+  if (merge) {
+    return counts;
   }
 
   for (const item of pack.monthFocus ?? []) {
